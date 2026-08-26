@@ -1,0 +1,57 @@
+_theme=omarchy-minimal
+_stock=omarchy
+_conf=/etc/plymouth/plymouthd.conf
+
+# DeviceScale=1 is not cosmetic. Plymouth guesses a HiDPI device scale from
+# DPI = width*254/(10*(width_mm+1)) and picks 2 above 96 DPI. On a 2880x1800
+# 310x200mm panel that is 235 DPI, so it would halve the logical window to
+# 1440x900 and upscale every image 2x with the same nearest-neighbour sampler
+# used by Image.Scale -- the whole composition twice its intended size and
+# visibly destroyed. plymouthd reads no conf.d, and this file belongs to the
+# plymouth package, so it is edited in place here rather than shipped.
+_ensure_device_scale() {
+    if [ ! -f "$_conf" ]; then
+        printf '[Daemon]\nDeviceScale=1\n' > "$_conf"
+        return
+    fi
+    if grep -q '^[[:space:]]*DeviceScale[[:space:]]*=' "$_conf"; then
+        sed -i 's/^[[:space:]]*DeviceScale[[:space:]]*=.*/DeviceScale=1/' "$_conf"
+    elif grep -q '^\[Daemon\]' "$_conf"; then
+        sed -i '0,/^\[Daemon\]/s//[Daemon]\nDeviceScale=1/' "$_conf"
+    else
+        printf '[Daemon]\nDeviceScale=1\n' >> "$_conf"
+    fi
+}
+
+_activate() {
+    _ensure_device_scale
+    plymouth-set-default-theme "$_theme"
+    echo ":: rebuilding the boot image so the LUKS prompt picks up the theme..."
+    mkinitcpio -P
+}
+
+post_install() {
+    _activate
+    cat <<'MSG'
+
+  Installed. The theme is generated for a 2880x1800 panel; for a different
+  screen edit W, H and SCALE in build-theme.py and rebuild the package.
+
+  Roll back to the stock Omarchy screen at any time with:
+      sudo plymouth-set-default-theme omarchy && sudo mkinitcpio -P
+
+MSG
+}
+
+post_upgrade() {
+    _activate
+}
+
+pre_remove() {
+    # Hand the boot screen back to the stock theme before the files vanish.
+    plymouth-set-default-theme "$_stock" || true
+}
+
+post_remove() {
+    mkinitcpio -P || true
+}

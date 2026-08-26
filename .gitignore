@@ -1,0 +1,10 @@
+# makepkg working directories and output
+/src/
+/pkg/
+*.pkg.tar.*
+*.log
+
+# generated theme assets (build-theme.py regenerates all 206 files)
+/theme/
+/tools/plyparse
+/tools/plyrun

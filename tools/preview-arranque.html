@@ -1,0 +1,686 @@
+<title>Arranque Omarchy</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@200;400;700&family=Noto+Sans+JP:wght@300;500&display=swap">
+
+<style>
+  :root {
+    --ground: #050505;
+    --bone: #CFC9B0;
+    --bone-dim: #4A4638;
+    --chrome: #55503F;
+    --chrome-hi: #8C8770;
+    --rust: #B0563F;
+    --mono: "JetBrains Mono", ui-monospace, "SFMono-Regular", Menlo, monospace;
+  }
+
+  * { box-sizing: border-box; }
+
+  body {
+    margin: 0;
+    background: var(--ground);
+    color: var(--bone);
+    font-family: var(--mono);
+    height: 100vh;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+  }
+
+  #screen {
+    flex: 1;
+    position: relative;
+    min-height: 0;
+    cursor: text;
+  }
+
+  canvas { display: block; width: 100%; height: 100%; }
+
+  /* ---- control strip: deliberately outside the illusion ---- */
+  #controls {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 1.1rem 1.6rem;
+    padding: 0.85rem 1.25rem;
+    border-top: 1px solid #14130F;
+    background: #0A0A08;
+    font-size: 0.7rem;
+    letter-spacing: 0.12em;
+  }
+
+  .ctl { display: flex; align-items: center; gap: 0.55rem; }
+
+  .ctl label {
+    text-transform: uppercase;
+    letter-spacing: 0.2em;
+    color: var(--chrome);
+    font-size: 0.62rem;
+    white-space: nowrap;
+  }
+
+  input[type="text"], select {
+    background: #050505;
+    border: 1px solid #221F18;
+    color: var(--bone);
+    font-family: var(--mono);
+    font-size: 0.72rem;
+    letter-spacing: 0.14em;
+    padding: 0.3rem 0.55rem;
+  }
+
+  input[type="text"] { width: 9.5rem; }
+  select { cursor: pointer; }
+
+  input[type="range"] { accent-color: var(--chrome-hi); width: 6.5rem; }
+
+  input:focus-visible, button:focus-visible, select:focus-visible {
+    outline: 1px solid var(--chrome-hi);
+    outline-offset: 2px;
+  }
+
+  button {
+    background: transparent;
+    border: 1px solid #2A2720;
+    color: var(--chrome-hi);
+    font-family: var(--mono);
+    font-size: 0.62rem;
+    letter-spacing: 0.2em;
+    text-transform: uppercase;
+    padding: 0.4rem 0.8rem;
+    cursor: pointer;
+  }
+
+  button:hover { border-color: var(--chrome-hi); color: var(--bone); }
+
+  .swatch {
+    display: inline-block;
+    width: 0.62rem;
+    height: 0.62rem;
+    border: 1px solid #221F18;
+    vertical-align: -1px;
+  }
+
+  .toggle { cursor: pointer; user-select: none; }
+  .toggle input { accent-color: var(--chrome-hi); }
+
+  #readout {
+    margin-left: auto;
+    color: var(--chrome);
+    font-size: 0.62rem;
+    letter-spacing: 0.18em;
+    text-transform: uppercase;
+    font-variant-numeric: tabular-nums;
+  }
+
+  #readout.bad { color: var(--rust); }
+</style>
+
+<div id="screen">
+  <canvas id="c"></canvas>
+</div>
+
+<div id="controls">
+  <div class="ctl">
+    <label for="outcome">Enter</label>
+    <select id="outcome">
+      <option value="wrong" selected>Wrong password</option>
+      <option value="right">Correct password</option>
+    </select>
+  </div>
+  <div class="ctl">
+    <label for="verify">Verify wait</label>
+    <select id="verify">
+      <option value="real" selected>Real — 15.8 s</option>
+      <option value="fast">Fast — 1.4 s</option>
+    </select>
+  </div>
+  <div class="ctl">
+    <label for="word">Background layer</label>
+    <input id="word" type="text" value="システム" maxlength="14" spellcheck="false" lang="ja">
+  </div>
+  <div class="ctl">
+    <label for="density">Glyphs</label>
+    <input id="density" type="range" min="0" max="60" value="20">
+    <span id="densityVal" style="color:var(--chrome-hi);font-variant-numeric:tabular-nums;">20</span>
+  </div>
+  <div class="ctl">
+    <label for="stacks">Stacks</label>
+    <input id="stacks" type="range" min="0" max="14" value="6">
+    <span id="stacksVal" style="color:var(--chrome-hi);font-variant-numeric:tabular-nums;">6</span>
+  </div>
+  <div class="ctl">
+    <label class="toggle"><input id="column" type="checkbox" checked> Katakana column</label>
+  </div>
+  <div class="ctl">
+    <label class="toggle"><input id="brackets" type="checkbox" checked> HUD marks</label>
+  </div>
+  <button id="reset">Reset</button>
+  <span id="readout">idle</span>
+</div>
+
+<script>
+(() => {
+  const KATAKANA = "ｱｲｳｴｵｶｷｸｹｺｻｼｽｾｿﾀﾁﾂﾃﾄﾅﾆﾇﾈﾉﾊﾋﾌﾍﾎﾏﾐﾑﾒﾓﾔﾕﾖﾗﾘﾙﾚﾛﾜﾝ".split("");
+  const COLUMN = "ｼｽﾃﾑ"; // shisutemu — "system"
+  const HINT = "TYPE A PASSWORD  ·  ENTER TO UNLOCK";
+  const BONE = [207, 201, 176];
+  const DIM  = [74, 70, 56];
+  const CHROME = [85, 80, 63];
+  const RUST = [176, 86, 63];   // the only chromatic note, and only on failure
+
+  const canvas = document.getElementById("c");
+  const ctx = canvas.getContext("2d");
+  const off = document.createElement("canvas");
+  const offCtx = off.getContext("2d");
+  const readout = document.getElementById("readout");
+  const wordInput = document.getElementById("word");
+  const densityInput = document.getElementById("density");
+  const densityVal = document.getElementById("densityVal");
+  const stacksInput = document.getElementById("stacks");
+  const stacksVal = document.getElementById("stacksVal");
+  const columnInput = document.getElementById("column");
+  const bracketsInput = document.getElementById("brackets");
+  const outcomeInput = document.getElementById("outcome");
+  const verifyInput = document.getElementById("verify");
+
+  const reduced = matchMedia("(prefers-reduced-motion: reduce)").matches;
+
+  // Global size factor, kept identical to SCALE in build-theme.py so this
+  // preview and the real boot screen stay the same size.
+  const S = 0.70;
+
+  // Plymouth cannot report a wrong password directly. What it does is come
+  // back to the normal display while cryptsetup runs, then re-issue the
+  // password request if the key was rejected. So the screen has to sit in a
+  // VERIFYING beat first and only then resolve one way or the other.
+  // Measured on the real machine: the LUKS header is argon2id with 9
+  // iterations over 1 GiB, and a rejected passphrase takes 15.8 s to come
+  // back. That makes VERIFYING the dominant state of this screen, not a
+  // blink — which is why it gets a sweeping scanner rather than a static
+  // label. The "Fast" setting exists only so this page stays testable.
+  const VERIFY_REAL_MS = 15800;
+  const VERIFY_FAST_MS = 1400;
+  const DENY_MS = 1600;     // full denial beat before the field is live again
+  const SEGMENTS = 7;       // the underline is segmented so it can break apart
+  const SWEEP_MS = 4400;    // one scanner round trip
+  const FROZEN_AT = 0.083;  // where boot progress was paused when the prompt appeared
+
+  // Variant C, as implemented in build-theme.py.
+  const cfg = { tint: 1, jitter: 1.8, flare: 1.2, shatter: true, tear: true };
+
+  const verifyMs = () =>
+    verifyInput.value === "fast" ? VERIFY_FAST_MS : VERIFY_REAL_MS;
+
+  let W = 0, H = 0, dpr = 1;
+  let field = [];
+  let typed = [];
+  let phase = "prompt";       // prompt | verifying | denied | unlocking
+  let phaseAt = 0;
+  let unlockAt = 0;
+  let attempts = 0;
+  let shards = [];
+  let segJitter = new Array(SEGMENTS).fill(0);
+  let bands = [];
+
+  const rgba = (c, a) => `rgba(${c[0]},${c[1]},${c[2]},${a})`;
+  const rand = (a, b) => a + Math.random() * (b - a);
+  const pick = a => a[(Math.random() * a.length) | 0];
+  const mix = (a, b, k) => [
+    a[0] + (b[0] - a[0]) * k,
+    a[1] + (b[1] - a[1]) * k,
+    a[2] + (b[2] - a[2]) * k
+  ];
+
+  // shared geometry for the login block
+  const midY = () => H * 0.47;
+  const lineY = () => midY() + H * 0.045 * S;
+  const dotY = () => lineY() - H * 0.028 * S;
+  const dotSpacing = () => H * 0.0206 * S;
+
+  const makeGlyph = (x, y, scale) => ({
+    x, y, scale,
+    glyph: pick(KATAKANA),
+    phase: Math.random() * Math.PI * 2,
+    speed: rand(0.15, 0.45),
+    swapAt: performance.now() + rand(1400, 6400)
+  });
+
+  function buildField() {
+    const n = +densityInput.value;
+    // Loose glyphs anywhere, plus short vertical stacks kept to the outer
+    // bands so they never crowd the login block. Every glyph in a stack
+    // swaps on its own timer — the stack is a shape, not a unit.
+    field = Array.from({ length: n }, () =>
+      // the real theme ships three fixed glyph sizes, so the preview matches
+      makeGlyph(Math.random(), Math.random(), pick([0.85, 1.10, 1.35])));
+
+    const stacks = +stacksInput.value;
+    for (let s = 0; s < stacks; s++) {
+      const scale = pick([0.85, 1.10, 1.35]);
+      const len = 2 + ((Math.random() * 5) | 0);
+      const x = Math.random() < 0.5
+        ? rand(0.03, 0.30)
+        : rand(0.62, 0.95);
+      const stepY = 0.023 * S * scale * 0.92;
+      const top = rand(0.02, Math.max(0.03, 0.96 - len * stepY));
+      for (let i = 0; i < len; i++) {
+        field.push(makeGlyph(x, top + i * stepY, scale));
+      }
+    }
+  }
+
+  function resize() {
+    dpr = Math.min(window.devicePixelRatio || 1, 2);
+    const r = canvas.getBoundingClientRect();
+    W = r.width; H = r.height;
+    canvas.width = Math.round(W * dpr);
+    canvas.height = Math.round(H * dpr);
+    off.width = canvas.width;
+    off.height = canvas.height;
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  }
+
+  function reset() {
+    typed = [];
+    shards = [];
+    attempts = 0;
+    phase = "prompt";
+    unlockAt = 0;
+    readout.className = "";
+    readout.textContent = "idle";
+  }
+
+  // ---- state transitions -------------------------------------------------
+
+  function submit() {
+    phase = "verifying";
+    phaseAt = performance.now();
+    readout.className = "";
+    readout.textContent = "verifying key";
+  }
+
+  function deny() {
+    attempts++;
+    phase = "denied";
+    phaseAt = performance.now();
+
+    const spacing = dotSpacing();
+    const startX = W / 2 - (typed.length - 1) * spacing / 2;
+    const y = dotY();
+    shards = cfg.shatter
+      ? typed.map((d, i) => ({
+          x: startX + i * spacing,
+          y,
+          vx: rand(-0.85, 0.85) * W * 0.0009,
+          vy: rand(-0.35, 0.25) * H * 0.0012
+        }))
+      : typed.map((d, i) => ({ x: startX + i * spacing, y, vx: 0, vy: 0 }));
+    typed = [];
+
+    for (let i = 0; i < SEGMENTS; i++) segJitter[i] = rand(-1, 1);
+    bands = Array.from({ length: 3 }, () => ({
+      y: rand(0.18, 0.78), h: rand(0.02, 0.07), dx: rand(-1, 1)
+    }));
+
+    readout.className = "bad";
+    readout.textContent = `access denied · attempt ${attempts}`;
+  }
+
+  function unlock() {
+    phase = "unlocking";
+    unlockAt = performance.now();
+  }
+
+  // ---- drawing ----------------------------------------------------------
+
+  function drawGhostWord(t) {
+    const word = wordInput.value.trim();
+    if (!word) return;
+    let size = H * 0.27 * S;
+    ctx.font = `200 ${size}px "Noto Sans JP", "JetBrains Mono", monospace`;
+    // Keep the ghost word inside 60% of the width, however many characters
+    // it has — システム is one glyph wider than the earlier word.
+    const maxW = W * 0.60 * S;
+    const measured = ctx.measureText(word).width;
+    if (measured > maxW) {
+      size *= maxW / measured;
+      ctx.font = `200 ${size}px "Noto Sans JP", "JetBrains Mono", monospace`;
+    }
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+    const breathe = reduced ? 0.5 : (Math.cos(t * 0.12) + 1) / 2;
+    ctx.fillStyle = rgba(DIM, 0.30 + breathe * 0.10);
+    ctx.save();
+    ctx.filter = "blur(0.4px)";
+    ctx.fillText(word, W / 2, midY());
+    ctx.restore();
+  }
+
+  function drawColumn(t) {
+    if (!columnInput.checked) return;
+    const size = Math.min(H * 0.052, W * 0.03) * S;
+    ctx.font = `300 ${size}px "Noto Sans JP", sans-serif`;
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+    const x = W * 0.80;
+    const top = midY() - (COLUMN.length - 1) * size * 0.82 / 2;
+    for (let i = 0; i < COLUMN.length; i++) {
+      const b = reduced ? 0.5 : (Math.cos(t * 0.3 + i * 0.7) + 1) / 2;
+      ctx.fillStyle = rgba(BONE, 0.10 + b * 0.06);
+      ctx.fillText(COLUMN[i], x, top + i * size * 0.82);
+    }
+  }
+
+  function drawField(t, dim) {
+    const now = performance.now();
+    const size = Math.min(H * 0.023, W * 0.015) * S;
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+    for (const g of field) {
+      if (now > g.swapAt) {
+        g.glyph = pick(KATAKANA);
+        g.swapAt = now + rand(2500, 10000);
+      }
+      const b = reduced ? 0.5 : (Math.cos(t * g.speed + g.phase) + 1) / 2;
+      ctx.font = `300 ${size * g.scale}px "Noto Sans JP", sans-serif`;
+      ctx.fillStyle = rgba(DIM, Math.min(1, (0.35 + b * 0.65) * dim));
+      ctx.fillText(g.glyph, g.x * W, g.y * H);
+    }
+  }
+
+  function drawBrackets(alpha, decay, tint) {
+    if (!bracketsInput.checked || alpha <= 0.01) return;
+    const grow = 1 + 0.03 * decay;
+    const bw = W * 0.30 * S * grow, bh = H * 0.20 * S * grow;
+    const x0 = W / 2 - bw / 2, x1 = W / 2 + bw / 2;
+    const y0 = midY() - bh / 2, y1 = midY() + bh / 2;
+    const arm = Math.min(bw, bh) * 0.07;
+    ctx.strokeStyle = rgba(tint, Math.min(1, 0.28 * alpha + 0.45 * decay));
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.moveTo(x0, y0 + arm); ctx.lineTo(x0, y0); ctx.lineTo(x0 + arm, y0);
+    ctx.moveTo(x1 - arm, y0); ctx.lineTo(x1, y0); ctx.lineTo(x1, y0 + arm);
+    ctx.moveTo(x0, y1 - arm); ctx.lineTo(x0, y1); ctx.lineTo(x0 + arm, y1);
+    ctx.moveTo(x1 - arm, y1); ctx.lineTo(x1, y1); ctx.lineTo(x1, y1 - arm);
+    ctx.stroke();
+  }
+
+  function drawWelcome(alpha, dx) {
+    if (alpha <= 0.01) return;
+    const size = Math.min(H * 0.032, W * 0.021) * S;
+    ctx.font = `400 ${size}px "JetBrains Mono", monospace`;
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+    ctx.fillStyle = rgba(BONE, 0.92 * alpha);
+    ctx.fillText("Welcome, Guillermo", W / 2 + dx, midY() - H * 0.055 * S);
+  }
+
+  // The underline is drawn as SEGMENTS abutting pieces rather than one bar.
+  // Idle they read as a single continuous rule; on denial each piece slides
+  // and gaps open, so the line looks like it broke rather than blinked.
+  function drawLine(alpha, decay, tint, dx) {
+    if (alpha <= 0.01) return;
+    const lw = W * 0.24 * S;
+    const y = lineY();
+    const x0 = W / 2 - lw / 2;
+    const segW = lw / SEGMENTS;
+    const base = (typed.length ? 0.55 : 0.30) * alpha;
+    const gap = decay * segW * 0.20;
+    for (let i = 0; i < SEGMENTS; i++) {
+      const ox = segJitter[i] * W * 0.014 * decay;
+      const oy = segJitter[(i + 3) % SEGMENTS] * 4 * decay;
+      ctx.fillStyle = rgba(tint, Math.min(1, base + 0.35 * decay));
+      ctx.fillRect(x0 + i * segW + ox + dx + gap / 2, y + oy, Math.max(1, segW - gap), 2);
+    }
+  }
+
+  function drawHint(alpha) {
+    if (alpha <= 0.01 || typed.length || attempts) return;
+    ctx.font = `400 ${H * 0.015 * S}px "JetBrains Mono", monospace`;
+    ctx.textAlign = "center";
+    ctx.textBaseline = "alphabetic";
+    ctx.letterSpacing = "0.22em";
+    ctx.fillStyle = rgba(CHROME, 0.85 * alpha);
+    ctx.fillText(HINT, W / 2, H - H * 0.034);
+    ctx.letterSpacing = "0px";
+  }
+
+  function drawDots(alpha) {
+    if (alpha <= 0.01 || !typed.length) return;
+    const now = performance.now();
+    const spacing = dotSpacing();
+    const y = dotY();
+    const startX = W / 2 - (typed.length - 1) * spacing / 2;
+    const box = H * 0.0072 * S;
+    const glyphSize = box * 2.6;
+
+    for (let i = 0; i < typed.length; i++) {
+      const x = startX + i * spacing;
+      const age = now - typed[i].born;
+      if (age < 220) {
+        const g = KATAKANA[(((age / 40) | 0) + i * 7) % KATAKANA.length];
+        ctx.font = `500 ${glyphSize}px "Noto Sans JP", sans-serif`;
+        ctx.textAlign = "center";
+        ctx.textBaseline = "middle";
+        ctx.fillStyle = rgba(BONE, 0.9 * alpha);
+        ctx.fillText(g, x, y);
+      } else {
+        ctx.fillStyle = rgba(BONE, 0.9 * alpha);
+        ctx.fillRect(x - box / 2, y - box / 2, box, box);
+      }
+    }
+  }
+
+  // The marks the user typed do not simply vanish on a rejected key — they
+  // are thrown off the line and burn out.
+  function drawShards(now, dx) {
+    if (!shards.length) return;
+    const age = now - phaseAt;
+    const a = Math.max(0, 1 - age / 520);
+    if (a <= 0) { shards = []; return; }
+    const box = H * 0.0072 * S;
+    for (const s of shards) {
+      const x = s.x + s.vx * age + dx;
+      const y = s.y + s.vy * age + 0.0000016 * age * age * H;
+      ctx.fillStyle = rgba(BONE, 0.9 * a);
+      ctx.fillRect(x - box / 2, y - box / 2, box, box);
+    }
+  }
+
+  // One label slot under the rule, shared by the two transient states.
+  function drawStatus(alpha, decay, tint, dx) {
+    if (phase === "unlocking") return;
+    const y = lineY() + H * 0.062 * S;
+    const size = H * 0.017 * S;
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+    ctx.font = `400 ${size}px "JetBrains Mono", monospace`;
+    ctx.letterSpacing = "0.34em";
+
+    if (phase === "verifying") {
+      const k = Math.min(1, (performance.now() - phaseAt) / 180);
+      ctx.fillStyle = rgba(CHROME, 0.9 * k * alpha);
+      ctx.fillText("VERIFYING KEY", W / 2, y);
+    } else if (attempts > 0) {
+      // bright and strobing during the beat, then a quiet standing notice
+      const strobe = phase === "denied" && !reduced && decay > 0.35
+        ? (Math.random() > 0.18 ? 1 : 0.25)
+        : 1;
+      const a = (phase === "denied" ? 0.35 + 0.6 * decay : 0.34) * alpha * strobe;
+      ctx.fillStyle = rgba(tint, a);
+      ctx.fillText("ACCESS DENIED", W / 2 + dx, y);
+
+      ctx.font = `400 ${size * 0.82}px "JetBrains Mono", monospace`;
+      ctx.letterSpacing = "0.28em";
+      ctx.fillStyle = rgba(CHROME, 0.55 * alpha);
+      ctx.fillText(
+        `ATTEMPT ${String(attempts).padStart(2, "0")}`,
+        W / 2 + dx, y + H * 0.030 * S
+      );
+    }
+    ctx.letterSpacing = "0px";
+  }
+
+  // Indeterminate scanner sliding along the rule while the key is checked.
+  // It never claims a percentage, because nothing here knows one.
+  function drawSweep(alpha) {
+    if (phase !== "verifying") return;
+    const lw = W * 0.24 * S;
+    const x0 = W / 2 - lw / 2;
+    const sw = lw * 0.22;
+    let p = reduced ? 0.5 : ((performance.now() - phaseAt) / SWEEP_MS) % 1;
+    if (p > 0.5) p = 1 - p;
+    p *= 2;
+    ctx.fillStyle = rgba(BONE, 0.80 * alpha);
+    ctx.fillRect(x0 + p * (lw - sw), lineY(), sw, 2);
+  }
+
+  // The bar belongs to the accepted key alone. On the real screen
+  // `plymouth ask-for-password` PAUSES boot progress while it asks, so during
+  // the check the bar would sit frozen at whatever fraction it had reached —
+  // a stuck sliver on every attempt, rejected ones included. The theme now
+  // treats that freeze as the check itself and the clock resuming as the
+  // acceptance, so the bar appears only here, already part-filled from before
+  // the prompt, and grows from there.
+  function drawProgress() {
+    if (phase !== "unlocking") return;
+    const p = Math.min(1, (performance.now() - unlockAt) / 4200);
+    const eased = FROZEN_AT + (1 - FROZEN_AT) * (1 - Math.pow(1 - p, 2.2));
+    ctx.fillStyle = rgba(BONE, 0.75);
+    ctx.fillRect(0, H - 2, W * eased, 2);
+    readout.className = "";
+    readout.textContent = `unlocked · ${Math.round(eased * 100)}%`;
+  }
+
+  // Horizontal band displacement, style C only. In the real theme this is
+  // per-sprite rather than per-pixel: sprites whose y falls inside a band
+  // get shifted, so a sprite straddling an edge moves whole.
+  function drawTear(now) {
+    if (!cfg.tear || phase !== "denied" || reduced) return;
+    const u = (now - phaseAt) / DENY_MS;
+    if (u >= 0.28) return;
+    const k = 1 - u / 0.28;
+    offCtx.setTransform(1, 0, 0, 1, 0, 0);
+    offCtx.clearRect(0, 0, off.width, off.height);
+    offCtx.drawImage(canvas, 0, 0);
+    for (const b of bands) {
+      const by = b.y * H, bh = b.h * H;
+      const dx = b.dx * W * 0.030 * k;
+      ctx.fillStyle = "#050505";
+      ctx.fillRect(0, by, W, bh);
+      ctx.drawImage(off, 0, by * dpr, off.width, bh * dpr, dx, by, W, bh);
+    }
+  }
+
+  function frame() {
+    const now = performance.now();
+    const t = now / 1000;
+
+    // resolve timed states before drawing
+    if (phase === "verifying" && now - phaseAt >= verifyMs()) {
+      if (outcomeInput.value === "wrong") deny(); else unlock();
+    } else if (phase === "denied" && now - phaseAt >= DENY_MS) {
+      phase = "prompt";
+      shards = [];
+    }
+
+    ctx.fillStyle = "#050505";
+    ctx.fillRect(0, 0, W, H);
+
+    let ui = 1, fieldDim = 1, decay = 0;
+
+    if (phase === "unlocking") {
+      const k = Math.min(1, (now - unlockAt) / 500);
+      ui = 1 - k;
+      fieldDim = 1 - k;
+    } else if (phase === "denied") {
+      decay = Math.exp(-((now - phaseAt) / DENY_MS) * 4.5);
+      fieldDim = 1 + cfg.flare * decay;
+    } else if (phase === "verifying") {
+      // the field settles while the key is checked
+      ui = 0.82;
+      readout.textContent =
+        `verifying key · ${((now - phaseAt) / 1000).toFixed(1)} s`;
+    }
+
+    const tint = mix(BONE, RUST, cfg.tint * decay);
+    const dx = (phase === "denied" && !reduced)
+      ? (Math.random() - 0.5) * W * 0.007 * cfg.jitter * decay
+      : 0;
+
+    drawGhostWord(t);
+    drawField(t, fieldDim);
+    drawColumn(t);
+    drawBrackets(ui, decay, tint);
+    drawWelcome(ui, dx);
+    drawLine(ui, decay, tint, dx);
+    drawSweep(ui);
+    drawHint(ui);
+    drawDots(phase === "verifying" ? ui * 0.55 : ui);
+    drawShards(now, dx);
+    drawStatus(ui, decay, tint, dx);
+    drawTear(now);
+    drawProgress();
+
+    requestAnimationFrame(frame);
+  }
+
+  // ---- input ------------------------------------------------------------
+
+  function onKey(e) {
+    if (e.key === "Escape") { reset(); e.preventDefault(); return; }
+    if (phase === "unlocking" || phase === "verifying") return;
+
+    if (e.key === "Enter") {
+      if (!typed.length) return;
+      submit();
+      e.preventDefault();
+      return;
+    }
+    if (e.key === "Backspace") {
+      typed.pop();
+      readout.className = "";
+      readout.textContent = typed.length ? `${typed.length} characters` : "idle";
+      e.preventDefault();
+      return;
+    }
+    if (e.key.length === 1 && typed.length < 21) {
+      if (phase === "denied") { phase = "prompt"; shards = []; }
+      typed.push({ born: performance.now() });
+      readout.className = "";
+      readout.textContent = `${typed.length} characters`;
+      e.preventDefault();
+    }
+  }
+
+  addEventListener("keydown", e => {
+    if (e.target.tagName === "INPUT" || e.target.tagName === "SELECT") return;
+    onKey(e);
+  });
+
+  document.getElementById("screen").addEventListener("pointerdown", () => {
+    if (document.activeElement) document.activeElement.blur();
+  });
+
+  document.getElementById("reset").addEventListener("click", reset);
+
+  densityInput.addEventListener("input", () => {
+    densityVal.textContent = densityInput.value;
+    buildField();
+  });
+
+  stacksInput.addEventListener("input", () => {
+    stacksVal.textContent = stacksInput.value;
+    buildField();
+  });
+
+  addEventListener("resize", resize);
+
+  resize();
+  buildField();
+  const start = () => requestAnimationFrame(frame);
+  if (document.fonts && document.fonts.ready) document.fonts.ready.then(start);
+  else start();
+})();
+</script>

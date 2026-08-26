@@ -1,0 +1,37 @@
+# --- stubs so the real theme script can run without a display ---
+global.sprites_made = 0;
+global.opacity_calls = 0;
+global.setimage_calls = 0;
+global.position_calls = 0;
+
+fun Image(name) {
+  local.img;
+  img.w = 300;
+  img.h = 60;
+  img.GetWidth = fun () { return this.w; };
+  img.GetHeight = fun () { return this.h; };
+  img.Scale = fun (a, b) { return Image("scaled"); };
+  return img;
+}
+
+fun Sprite(img) {
+  local.s;
+  global.sprites_made++;
+  s.SetPosition = fun (x, y, z) { global.position_calls++; return 0; };
+  s.SetOpacity = fun (o) { global.opacity_calls++; global.last_opacity = o; return 0; };
+  s.SetImage = fun (i) { global.setimage_calls++; return 0; };
+  return s;
+}
+
+Window.GetWidth = fun () { return 2880; };
+Window.GetHeight = fun () { return 1800; };
+Window.SetBackgroundTopColor = fun (r, g, b) { return 0; };
+Window.SetBackgroundBottomColor = fun (r, g, b) { return 0; };
+
+Plymouth.GetMode = fun () { return "@MODE@"; };
+Plymouth.SetRefreshFunction = fun (f) { return 0; };
+Plymouth.SetBootProgressFunction = fun (f) { return 0; };
+Plymouth.SetDisplayNormalFunction = fun (f) { return 0; };
+Plymouth.SetDisplayPasswordFunction = fun (f) { return 0; };
+Plymouth.SetDisplayMessageFunction = fun (f) { return 0; };
+Plymouth.SetHideMessageFunction = fun (f) { return 0; };

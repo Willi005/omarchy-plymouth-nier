@@ -1,0 +1,66 @@
+# --- round 11: frozen progress means "checking", resuming means "accepted" ---
+
+for (zz = 0; zz < 10; zz++) { refresh_callback(); }
+for (qq = 1; qq <= 5; qq++) {
+  display_password_callback("p", qq);
+  refresh_callback();
+}
+display_normal_callback();
+global.state_after_enter = global.state;
+
+# ---- A. the pause: 40 ticks with the clock standing still -------------------
+for (zz = 0; zz < 40; zz++) { progress_callback(100.0, 0.083); refresh_callback(); }
+global.frozen_seen = global.frozen;
+global.state_while_frozen = global.state;
+global.bar_while_frozen = global.max_progress;
+
+# ---- B. rejected key: still frozen the whole way, then the retry -------------
+for (zz = 0; zz < 40; zz++) { progress_callback(100.0, 0.083); }
+global.state_before_reject = global.state;
+display_password_callback("p", 0);
+global.attempts_1 = global.attempts;
+global.bar_after_reject = global.max_progress;
+global.frozen_after_reject = global.frozen;
+for (zz = 0; zz < 90; zz++) { refresh_callback(); }
+global.denying_done = global.denying;
+
+# ---- C. second attempt, accepted: the clock resumes --------------------------
+for (qq = 1; qq <= 4; qq++) {
+  display_password_callback("p", qq);
+  refresh_callback();
+}
+display_normal_callback();
+for (zz = 0; zz < 40; zz++) { progress_callback(200.0, 0.083); refresh_callback(); }
+global.state_frozen_2 = global.state;
+global.bar_frozen_2 = global.max_progress;
+
+progress_callback(200.20, 0.085);          # a blip smaller than resume_secs
+global.state_after_blip = global.state;
+
+progress_callback(200.50, 0.090);          # a real resume
+global.state_after_resume = global.state;
+
+progress_callback(201.00, 0.120);
+global.bar_after_resume = global.max_progress;
+for (zz = 0; zz < 30; zz++) { refresh_callback(); }
+global.ui_after_unlock = global.ui_alpha;
+global.dim_after_unlock = global.field_dim;
+
+# ---- D. fallback: a system where progress is never paused -------------------
+display_password_callback("p", 0);         # denial resets us to the prompt
+for (zz = 0; zz < 90; zz++) { refresh_callback(); }
+for (qq = 1; qq <= 3; qq++) {
+  display_password_callback("p", qq);
+  refresh_callback();
+}
+display_normal_callback();
+global.state_fb_start = global.state;
+
+nn = 300.0;
+for (zz = 0; zz < 30; zz++) { nn = nn + 0.4; progress_callback(nn, 0.30); }
+global.frozen_fb = global.frozen;
+global.state_fb_at_12s = global.state;     # 12 s of movement, under verify_secs
+
+for (zz = 0; zz < 20; zz++) { nn = nn + 0.4; progress_callback(nn, 0.35); }
+global.state_fb_at_20s = global.state;     # past 17 s => fallback commits
+global.frames_total = global.frame;

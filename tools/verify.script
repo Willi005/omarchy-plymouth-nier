@@ -1,0 +1,82 @@
+# --- assertions after the real script has run ---
+# Loop counters here are deliberately odd names: a bare assignment inside a
+# theme function writes through to a same-named global, so a test counter
+# called i or b would be clobbered mid-loop by refresh_callback.
+
+global.and_test = 0;
+if (1 == 1 && 2 == 2) global.and_test = 1;
+global.or_test = 0;
+if (1 == 2 || 3 == 3) global.or_test = 1;
+
+nn = 0; for (qi = 0; amb.sprite[qi]; qi++) { nn++; }      global.amb_alive = nn;
+nn = 0; for (qi = 0; column.sprite[qi]; qi++) { nn++; }   global.column_alive = nn;
+nn = 0; for (qi = 0; bracket.sprite[qi]; qi++) { nn++; }  global.bracket_alive = nn;
+nn = 0; for (qi = 0; seg.bone[qi]; qi++) { nn++; }        global.seg_bone_alive = nn;
+nn = 0; for (qi = 0; seg.rust[qi]; qi++) { nn++; }        global.seg_rust_alive = nn;
+nn = 0; for (qi = 0; shard.sprite[qi]; qi++) { nn++; }    global.shard_alive = nn;
+
+for (zz = 0; zz < 20; zz++) { refresh_callback(); }
+global.idle_state = global.state;
+
+# type five characters
+for (qq = 1; qq <= 5; qq++) {
+  display_password_callback("p", qq);
+  for (zz = 0; zz < 4; zz++) { refresh_callback(); }
+}
+global.typed_any_before_enter = global.typed_any;
+nn = 0; for (qi = 0; dot.sprite[qi]; qi++) { nn++; }      global.dots_alive = nn;
+
+# Enter: entry drops, display returns to normal while cryptsetup runs
+display_normal_callback();
+global.state_after_enter = global.state;
+for (zz = 0; zz < 30; zz++) { refresh_callback(); }
+global.state_while_verifying = global.state;
+global.ui_while_verifying = global.ui_alpha;
+
+# ---- rejected key: Plymouth asks again --------------------------------------
+display_password_callback("p", 0);
+global.attempts_after_reject = global.attempts;
+global.denying_after_reject = global.denying;
+global.shards_after_reject = global.shard_count;
+global.tearing_after_reject = global.tearing;
+global.state_after_reject = global.state;
+
+for (zz = 0; zz < 5; zz++) { refresh_callback(); }
+global.decay_early = global.decay;
+global.dim_early = global.field_dim;
+
+for (zz = 0; zz < 25; zz++) { refresh_callback(); }
+global.tearing_after_30 = global.tearing;
+
+for (zz = 0; zz < 60; zz++) { refresh_callback(); }
+global.denying_after_90 = global.denying;
+global.decay_after_90 = global.decay;
+global.jx_after_90 = global.jx;
+global.shards_after_90 = global.shard_count;
+
+# ---- second attempt, this one accepted --------------------------------------
+for (qq = 1; qq <= 4; qq++) {
+  display_password_callback("p", qq);
+  for (zz = 0; zz < 4; zz++) { refresh_callback(); }
+}
+display_normal_callback();
+global.state_after_enter2 = global.state;
+
+for (zz = 0; zz < 40; zz++) { refresh_callback(); }
+global.state_at_40 = global.state;
+
+for (zz = 0; zz < 60; zz++) { refresh_callback(); }
+global.state_at_100 = global.state;
+global.ui_final = global.ui_alpha;
+global.dim_final = global.field_dim;
+
+progress_callback(20, 0.5);
+global.progress_after_unlock = global.max_progress;
+
+# ---- a rejection arriving LATE, after the commit -----------------------------
+display_password_callback("p", 0);
+global.attempts_late = global.attempts;
+global.state_late = global.state;
+global.denying_late = global.denying;
+for (zz = 0; zz < 3; zz++) { refresh_callback(); }
+global.ui_after_late = global.ui_alpha;

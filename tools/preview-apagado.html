@@ -1,0 +1,217 @@
+<title>Apagado Omarchy</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@200;400;700&family=Noto+Sans+JP:wght@300;500&display=swap">
+
+<style>
+  :root {
+    --ground: #050505;
+    --bone: #CFC9B0;
+    --bone-dim: #4A4638;
+    --chrome: #55503F;
+    --chrome-hi: #8C8770;
+    --mono: "JetBrains Mono", ui-monospace, "SFMono-Regular", Menlo, monospace;
+  }
+
+  * { box-sizing: border-box; }
+
+  body {
+    margin: 0;
+    background: var(--ground);
+    color: var(--bone);
+    font-family: var(--mono);
+    height: 100vh;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+  }
+
+  #screen { flex: 1; position: relative; min-height: 0; }
+  canvas { display: block; width: 100%; height: 100%; }
+
+  #controls {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 1.25rem 1.75rem;
+    padding: 0.85rem 1.25rem;
+    border-top: 1px solid #14130F;
+    background: #0A0A08;
+    font-size: 0.7rem;
+    letter-spacing: 0.12em;
+  }
+
+  .ctl { display: flex; align-items: center; gap: 0.55rem; }
+
+  .ctl label, legend {
+    text-transform: uppercase;
+    letter-spacing: 0.2em;
+    color: var(--chrome);
+    font-size: 0.62rem;
+    white-space: nowrap;
+  }
+
+  input[type="text"] {
+    background: #050505;
+    border: 1px solid #221F18;
+    color: var(--bone);
+    font-family: var(--mono);
+    font-size: 0.72rem;
+    letter-spacing: 0.14em;
+    padding: 0.3rem 0.55rem;
+    width: 12rem;
+  }
+
+  input:focus-visible, button:focus-visible {
+    outline: 1px solid var(--chrome-hi);
+    outline-offset: 2px;
+  }
+
+  button {
+    background: transparent;
+    border: 1px solid #2A2720;
+    color: var(--chrome-hi);
+    font-family: var(--mono);
+    font-size: 0.62rem;
+    letter-spacing: 0.2em;
+    text-transform: uppercase;
+    padding: 0.4rem 0.8rem;
+    cursor: pointer;
+  }
+
+  button:hover { border-color: var(--chrome-hi); color: var(--bone); }
+  button[aria-pressed="true"] { border-color: var(--bone); color: var(--bone); }
+
+  .group { display: flex; gap: 0.4rem; }
+
+  #readout {
+    margin-left: auto;
+    color: var(--chrome);
+    font-size: 0.62rem;
+    letter-spacing: 0.18em;
+    text-transform: uppercase;
+  }
+</style>
+
+<div id="screen"><canvas id="c"></canvas></div>
+
+<div id="controls">
+  <div class="ctl">
+    <span class="group" role="group" aria-label="Variant">
+      <button id="v1" aria-pressed="true">A · text only</button>
+      <button id="v2" aria-pressed="false">B · rule + label</button>
+      <button id="v3" aria-pressed="false">C · HUD brackets</button>
+    </span>
+  </div>
+  <div class="ctl">
+    <label for="msg">Farewell</label>
+    <input id="msg" type="text" value="Goodbye, Guillermo" maxlength="34" spellcheck="false">
+  </div>
+  <div class="ctl">
+    <label for="sub">Label</label>
+    <input id="sub" type="text" value="SYSTEM OFFLINE" maxlength="26" spellcheck="false" style="width:9rem">
+  </div>
+  <button id="replay">Replay</button>
+  <span id="readout">variant A</span>
+</div>
+
+<script>
+(() => {
+  const BONE = [207, 201, 176];
+  const CHROME = [85, 80, 63];
+  const S = 0.70; // same size factor as the login screen and build-theme.py
+
+  const canvas = document.getElementById("c");
+  const ctx = canvas.getContext("2d");
+  const msgInput = document.getElementById("msg");
+  const subInput = document.getElementById("sub");
+  const readout = document.getElementById("readout");
+  const reduced = matchMedia("(prefers-reduced-motion: reduce)").matches;
+
+  let W = 0, H = 0, dpr = 1;
+  let variant = 1;
+  let start = performance.now();
+
+  const rgba = (c, a) => `rgba(${c[0]},${c[1]},${c[2]},${a})`;
+
+  function resize() {
+    dpr = Math.min(window.devicePixelRatio || 1, 2);
+    const r = canvas.getBoundingClientRect();
+    W = r.width; H = r.height;
+    canvas.width = Math.round(W * dpr);
+    canvas.height = Math.round(H * dpr);
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  }
+
+  function setVariant(v) {
+    variant = v;
+    for (const [i, id] of ["v1", "v2", "v3"].entries())
+      document.getElementById(id).setAttribute("aria-pressed", String(i + 1 === v));
+    readout.textContent = "variant " + "ABC"[v - 1];
+    start = performance.now();
+  }
+
+  function drawBrackets(alpha) {
+    const bw = W * 0.30 * S, bh = H * 0.20 * S;
+    const x0 = W / 2 - bw / 2, x1 = W / 2 + bw / 2;
+    const y0 = H * 0.47 - bh / 2, y1 = H * 0.47 + bh / 2;
+    const arm = Math.min(bw, bh) * 0.07;
+    ctx.strokeStyle = rgba(BONE, 0.28 * alpha);
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.moveTo(x0, y0 + arm); ctx.lineTo(x0, y0); ctx.lineTo(x0 + arm, y0);
+    ctx.moveTo(x1 - arm, y0); ctx.lineTo(x1, y0); ctx.lineTo(x1, y0 + arm);
+    ctx.moveTo(x0, y1 - arm); ctx.lineTo(x0, y1); ctx.lineTo(x0 + arm, y1);
+    ctx.moveTo(x1 - arm, y1); ctx.lineTo(x1, y1); ctx.lineTo(x1, y1 - arm);
+    ctx.stroke();
+  }
+
+  function frame() {
+    const t = (performance.now() - start) / 1000;
+    ctx.fillStyle = "#050505";
+    ctx.fillRect(0, 0, W, H);
+
+    // fade in over ~0.9s, then hold; a very slow breath keeps it alive
+    const fadeIn = reduced ? 1 : Math.min(1, t / 0.9);
+    const breath = reduced ? 1 : 0.94 + 0.06 * (Math.cos(t * 0.7) + 1) / 2;
+    const a = fadeIn * breath;
+
+    const cy = H * 0.47;
+    const size = Math.min(H * 0.032, W * 0.021) * S;
+
+    if (variant === 3) drawBrackets(fadeIn);
+
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+    ctx.font = `400 ${size}px "JetBrains Mono", monospace`;
+    ctx.fillStyle = rgba(BONE, 0.92 * a);
+    ctx.fillText(msgInput.value, W / 2, variant === 1 ? cy : cy - H * 0.028 * S);
+
+    if (variant === 2 || variant === 3) {
+      const lw = W * 0.24 * S;
+      const ly = cy + H * 0.012 * S;
+      ctx.fillStyle = rgba(BONE, 0.30 * fadeIn);
+      ctx.fillRect(W / 2 - lw / 2, ly, lw, 2);
+
+      ctx.font = `400 ${H * 0.015 * S}px "JetBrains Mono", monospace`;
+      ctx.letterSpacing = "0.22em";
+      ctx.fillStyle = rgba(CHROME, 0.85 * fadeIn);
+      ctx.fillText(subInput.value, W / 2, ly + H * 0.040 * S);
+      ctx.letterSpacing = "0px";
+    }
+
+    requestAnimationFrame(frame);
+  }
+
+  document.getElementById("v1").addEventListener("click", () => setVariant(1));
+  document.getElementById("v2").addEventListener("click", () => setVariant(2));
+  document.getElementById("v3").addEventListener("click", () => setVariant(3));
+  document.getElementById("replay").addEventListener("click", () => { start = performance.now(); });
+  addEventListener("resize", resize);
+
+  resize();
+  const go = () => requestAnimationFrame(frame);
+  if (document.fonts && document.fonts.ready) document.fonts.ready.then(go);
+  else go();
+})();
+</script>
