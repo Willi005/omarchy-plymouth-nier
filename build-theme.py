@@ -3,22 +3,129 @@
 
 Everything visible is pre-rendered at its exact final pixel size, because
 Plymouth's Image.Scale is nearest-neighbour (verified by disassembling
-ply_pixel_buffer_resize) and destroys antialiased artwork.
+ply_pixel_buffer_resize) and destroys antialiased artwork. That is also why
+this has to run on, or at least know about, the machine it is for: the
+artwork is sized in real pixels, so it is regenerated per screen rather than
+scaled at boot.
 
-Sizes below assume the boot window is the panel's native 2880x1800, which
-requires DeviceScale=1 in /etc/plymouth/plymouthd.conf. Without that,
+The generated sizes assume the boot window is the panel's native resolution,
+which requires DeviceScale=1 in /etc/plymouth/plymouthd.conf. Without that,
 Plymouth's HiDPI heuristic (DPI = width*254/(10*(width_mm+1)) > 96) picks
 device scale 2, halves the logical window and upscales every image 2x.
+
+Settings come from theme.conf next to this file, overridable per-variable by
+the environment as PLYMOUTH_NAME / PLYMOUTH_RESOLUTION / PLYMOUTH_GHOST_WORD.
 
 Usage: build-theme.py <output-dir>
 """
 
+import glob
+import os
+import pwd
 import subprocess
 import sys
 from pathlib import Path
 
-CJK = "/usr/share/fonts/noto-cjk/NotoSansCJK-Regular.ttc"
-JB = "/usr/share/fonts/TTF/JetBrainsMonoNerdFont-Regular.ttf"
+HERE = Path(__file__).resolve().parent
+
+# The composition was designed on a 1800px-tall screen; every pointsize below
+# is in pixels for that height and gets multiplied by RES for the real one.
+DESIGN_HEIGHT = 1800
+
+
+def load_conf():
+    conf = {}
+    path = HERE / "theme.conf"
+    if path.exists():
+        for line in path.read_text().splitlines():
+            line = line.strip()
+            if not line or line.startswith("#") or "=" not in line:
+                continue
+            k, _, v = line.partition("=")
+            conf[k.strip()] = v.strip()
+    for key in ("NAME", "RESOLUTION", "GHOST_WORD"):
+        env = os.environ.get("PLYMOUTH_" + key)
+        if env:
+            conf[key] = env
+    return conf
+
+
+CONF = load_conf()
+
+
+def account_name():
+    """Real name if the account has one, otherwise the login name."""
+    try:
+        entry = pwd.getpwuid(os.getuid())
+    except KeyError:
+        return "there"
+    gecos = (entry.pw_gecos or "").split(",")[0].strip()
+    if gecos:
+        return gecos.split()[0]
+    return entry.pw_name.capitalize()
+
+
+def detect_resolution():
+    """Preferred mode of the largest connected display, straight from DRM.
+
+    /sys/class/drm/*/modes is readable with no session and no X/Wayland
+    connection, which matters because this may run from a package build.
+    """
+    best = None
+    for path in sorted(glob.glob("/sys/class/drm/*/modes")):
+        try:
+            first = open(path).readline().strip()
+        except OSError:
+            continue
+        if "x" not in first:
+            continue
+        try:
+            w, h = (int(n) for n in first.split("x", 1))
+        except ValueError:
+            continue
+        if best is None or w * h > best[0] * best[1]:
+            best = (w, h)
+    return best
+
+
+def resolution():
+    want = CONF.get("RESOLUTION", "auto").lower()
+    if want and want != "auto":
+        try:
+            w, h = (int(n) for n in want.split("x", 1))
+            return w, h
+        except ValueError:
+            sys.exit(f"theme.conf: RESOLUTION must be auto or WxH, got {want!r}")
+    found = detect_resolution()
+    if found:
+        return found
+    print("warning: no connected display found in /sys/class/drm; assuming "
+          "1920x1080. Set RESOLUTION in theme.conf if that is wrong.",
+          file=sys.stderr)
+    return 1920, 1080
+
+
+def font_file(family, needle, package):
+    """Resolve a family to a real font file, since paths differ per distro.
+
+    fc-match always answers with *something*, so the family it actually
+    matched has to be checked or the theme would silently render in a
+    substitute face.
+    """
+    try:
+        out = subprocess.run(["fc-match", "-f", "%{file}\t%{family}", family],
+                             check=True, capture_output=True, text=True).stdout
+    except (OSError, subprocess.CalledProcessError):
+        sys.exit("fc-match not available — install fontconfig")
+    path, _, families = out.partition("\t")
+    if not path or needle.lower() not in families.lower():
+        sys.exit(f"font {family!r} not installed — install {package}")
+    return path
+
+
+CJK = font_file("Noto Sans CJK JP", "Noto Sans CJK", "noto-fonts-cjk")
+JB = font_file("JetBrainsMono Nerd Font", "JetBrainsMono",
+               "ttf-jetbrains-mono-nerd")
 
 BONE = "#CFC9B0"     # NieR bone, everything the eye should read
 DIM = "#4A4638"      # ghost word only
@@ -29,32 +136,44 @@ KATA = "ｱｲｳｴｵｶｷｸｹｺｻｼｽｾｿﾀﾁﾂﾃﾄﾅﾆﾇﾈ
 COLUMN_CHARS = "ｼｽﾃﾑ"          # シ ス テ ム
 RATIO = 1.2308                  # glyph box / pointsize
 
-W, H = 2880, 1800
+W, H = resolution()
+RES = H / DESIGN_HEIGHT
+
+NAME = CONF.get("NAME") or account_name()
+GHOST_WORD = CONF.get("GHOST_WORD") or "システム"
 
 # Global size factor. 1.00 was the first native-resolution pass; the user asked
 # for 30% smaller, and it applies to the artwork AND to the layout ratios in
 # the script below, so the whole composition scales as one.
 SCALE = 0.70
 
-AMBIENT_BOXES = tuple(round(b * SCALE) for b in (43, 56, 69))
-HIT_BOX = round(41 * SCALE)      # typed-character glitch glyph
-COLUMN_BOX = round(106 * SCALE)  # vertical column at the right
-GHOST_POINTSIZE = round(432 * SCALE)
+# Everything below is "pixels on a DESIGN_HEIGHT-tall screen" times RES.
+_S = SCALE * RES
+
+AMBIENT_BOXES = tuple(round(b * _S) for b in (43, 56, 69))
+HIT_BOX = round(41 * _S)      # typed-character glitch glyph
+COLUMN_BOX = round(106 * _S)  # vertical column at the right
+GHOST_POINTSIZE = round(432 * _S)
+GHOST_MAX_WIDTH = 0.62        # fraction of the screen the ghost word may span
 GHOST_SS = 3           # supersample factor for the ghost word only
 GHOST_BLUR = "0x0.7"   # was 0x1.4; the supersample no longer needs it to hide edges
-WELCOME_POINTSIZE = round(58 * SCALE)
-HINT_POINTSIZE = round(27 * SCALE)
-HINT_KERNING = round(6 * SCALE)
-DOT_BOX = round(13 * SCALE)
-STATUS_POINTSIZE = round(30 * SCALE)   # ACCESS DENIED / VERIFYING KEY
-STATUS_KERNING = round(10 * SCALE)
-ATT_POINTSIZE = round(25 * SCALE)      # ATTEMPT NN, one step down
-ATT_KERNING = round(8 * SCALE)
+WELCOME_POINTSIZE = round(58 * _S)
+HINT_POINTSIZE = round(27 * _S)
+HINT_KERNING = round(6 * _S)
+DOT_BOX = round(13 * _S)
+STATUS_POINTSIZE = round(30 * _S)   # ACCESS DENIED / VERIFYING KEY
+STATUS_KERNING = round(10 * _S)
+ATT_POINTSIZE = round(25 * _S)      # ATTEMPT NN, one step down
+ATT_KERNING = round(8 * _S)
 MAX_ATTEMPT_LABEL = 9                  # attempts past this reuse the last label
 
 
 def magick(*args):
-    subprocess.run(["magick", *[str(a) for a in args]], check=True)
+    args = [str(a) for a in args]
+    # -strip drops the creation timestamp ImageMagick bakes into every PNG, so
+    # rebuilding the theme yields byte-identical assets instead of 206 files
+    # that all "changed".
+    subprocess.run(["magick", *args[:-1], "-strip", args[-1]], check=True)
 
 
 def glyph(ch, box, out, color=BONE):
@@ -79,20 +198,32 @@ def build_assets(d: Path):
     # what the design calls for rather than a way to hide aliasing. The
     # downsample is forced to the exact 1x dimensions so the size is unchanged.
     probe = d / "ghost_probe.png"
+    points = GHOST_POINTSIZE
     magick("-background", "none", "-fill", DIM, "-font", CJK,
-           "-pointsize", GHOST_POINTSIZE, "label:システム", probe)
-    gw, gh = subprocess.run(
+           "-pointsize", points, "label:" + GHOST_WORD, probe)
+    gw, gh = (int(n) for n in subprocess.run(
         ["identify", "-format", "%w %h", str(probe)],
-        check=True, capture_output=True, text=True).stdout.split()
+        check=True, capture_output=True, text=True).stdout.split())
+
+    # The pointsize is derived from screen height, so on a wider aspect ratio
+    # or a longer word the ghost could run past the edges. Pull it back in.
+    limit = W * GHOST_MAX_WIDTH
+    if gw > limit:
+        points = max(1, round(points * limit / gw))
+        magick("-background", "none", "-fill", DIM, "-font", CJK,
+               "-pointsize", points, "label:" + GHOST_WORD, probe)
+        gw, gh = (int(n) for n in subprocess.run(
+            ["identify", "-format", "%w %h", str(probe)],
+            check=True, capture_output=True, text=True).stdout.split())
     probe.unlink()
 
     magick("-background", "none", "-fill", DIM, "-font", CJK,
-           "-pointsize", GHOST_POINTSIZE * GHOST_SS, "label:システム",
+           "-pointsize", points * GHOST_SS, "label:" + GHOST_WORD,
            "-filter", "Lanczos", "-resize", f"{gw}x{gh}!",
            "-blur", GHOST_BLUR, d / "ghost.png")
 
     magick("-background", "none", "-fill", BONE, "-font", JB,
-           "-pointsize", WELCOME_POINTSIZE, "label:Welcome, Guillermo",
+           "-pointsize", WELCOME_POINTSIZE, f"label:Welcome, {NAME}",
            d / "welcome.png")
 
     magick("-background", "none", "-fill", CHROME, "-font", JB,
@@ -101,7 +232,7 @@ def build_assets(d: Path):
 
     # Shutdown screen: farewell line plus a small status label.
     magick("-background", "none", "-fill", BONE, "-font", JB,
-           "-pointsize", WELCOME_POINTSIZE, "label:Goodbye, Guillermo",
+           "-pointsize", WELCOME_POINTSIZE, f"label:Goodbye, {NAME}",
            d / "goodbye.png")
 
     magick("-background", "none", "-fill", CHROME, "-font", JB,

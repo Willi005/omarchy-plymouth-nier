@@ -10,24 +10,29 @@ pkgver=1.0.0
 pkgrel=1
 pkgdesc="NieR-inspired Plymouth theme for the Omarchy LUKS unlock and shutdown screens"
 arch=('any')
-url="https://github.com/gsm/omarchy-plymouth-nier"
+url="https://github.com/Willi005/omarchy-plymouth-nier"
 license=('MIT')
 depends=('plymouth')
-makedepends=('python' 'imagemagick' 'noto-fonts-cjk' 'ttf-jetbrains-mono-nerd-basic')
+makedepends=('python' 'imagemagick' 'fontconfig' 'noto-fonts-cjk'
+             'ttf-jetbrains-mono-nerd')
 install="$pkgname.install"
-source=('build-theme.py')
-sha256sums=('SKIP')
+source=('build-theme.py' 'theme.conf' 'LICENSE')
+sha256sums=('SKIP' 'SKIP' 'SKIP')
 
 _theme=omarchy-minimal
 
 build() {
-    # Renders every asset at its exact final pixel size for a 2880x1800 panel.
-    # Nothing antialiased is ever scaled at runtime: Plymouth's Image.Scale is
-    # a nearest-neighbour sampler and destroys artwork.
+    # Renders every asset at its exact final pixel size for THIS machine's
+    # panel: nothing antialiased is ever scaled at runtime, because Plymouth's
+    # Image.Scale is a nearest-neighbour sampler and destroys artwork. The
+    # screen size, the name on the greeting and the background word come from
+    # theme.conf, and each can be overridden from the environment, e.g.
+    #     PLYMOUTH_NAME="Ada" makepkg -sif
     python3 "$srcdir/build-theme.py" "$srcdir/theme"
 }
 
 package() {
     install -dm755 "$pkgdir/usr/share/plymouth/themes/$_theme"
     install -m644 -t "$pkgdir/usr/share/plymouth/themes/$_theme" "$srcdir/theme/"*
+    install -Dm644 "$srcdir/LICENSE" "$pkgdir/usr/share/licenses/$pkgname/LICENSE"
 }

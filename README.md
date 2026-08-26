@@ -19,6 +19,9 @@ resolution inside the initramfs.
 On Arch / Omarchy:
 
 ```bash
+git clone https://github.com/Willi005/omarchy-plymouth-nier
+cd omarchy-plymouth-nier
+$EDITOR theme.conf        # at minimum, put your own name in it
 makepkg -si
 ```
 
@@ -46,15 +49,34 @@ sudo plymouth-set-default-theme omarchy && sudo mkinitcpio -P
 The stock theme at `/usr/share/plymouth/themes/omarchy/` is never modified.
 Removing the package does this for you.
 
-## Different screen
+## Making it yours
 
-`build-theme.py` renders for a 2880x1800 panel. For another size edit `W`,
-`H`, and `SCALE` at the top and rebuild. `SCALE` drives both the asset
-pointsizes and the layout ratios, so the composition shrinks or grows as one
-piece rather than drifting apart.
+Edit `theme.conf` and rebuild. Every key also works as an environment
+variable, which wins over the file:
 
-The name is a literal string in the script: change the `Welcome, Guillermo`
-and `Goodbye, Guillermo` labels in `build_assets()`.
+| key | default | what it does |
+|---|---|---|
+| `NAME` | the account's real name, else its login name | `Welcome, <NAME>` and `Goodbye, <NAME>` |
+| `RESOLUTION` | `auto` | panel size the assets are rendered for |
+| `GHOST_WORD` | `システム` | the large word breathing behind everything |
+
+```bash
+PLYMOUTH_NAME="Ada" makepkg -sif
+```
+
+`auto` reads the preferred mode of the largest connected display from
+`/sys/class/drm`, which works with no session running. The artwork has to be
+rendered in real pixels for the target screen — see trap 1 below — so this is
+not something the theme can adapt to at boot. Layout is expressed as
+fractions of the window, so the composition holds its proportions; only the
+asset sizes change. Verified at 1366x768, 1920x1080, 2880x1800 and 3840x2160.
+
+Builds are reproducible: rebuilding the same config twice yields
+byte-identical assets.
+
+The composition as a whole is scaled by `SCALE` at the top of
+`build-theme.py`, which drives both the asset pointsizes and the layout
+ratios, so it shrinks or grows as one piece rather than drifting apart.
 
 ## Four things that will bite you
 
@@ -117,6 +139,8 @@ working keyboard.
 
 ```
 build-theme.py                  generates every asset, the theme script and the metadata
+theme.conf                      name, target resolution, background word
+CLAUDE.md                       working notes: the traps, and how to verify a change
 PKGBUILD                        Arch package; builds assets at package time
 omarchy-plymouth-nier.install   pacman scriptlet: DeviceScale, set-default-theme, mkinitcpio
 install.sh                      same thing without pacman
