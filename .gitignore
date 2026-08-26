@@ -8,3 +8,7 @@
 /theme/
 /tools/plyparse
 /tools/plyrun
+
+# python bytecode from importing the generator
+__pycache__/
+*.pyc
