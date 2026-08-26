@@ -23,22 +23,50 @@ _ensure_device_scale() {
     fi
 }
 
+# How the boot image is rebuilt depends on the bootloader setup, and getting
+# this wrong leaves the theme installed but never shown.
+#
+# On a Limine + Unified Kernel Image system there are no mkinitcpio presets at
+# all: /etc/mkinitcpio.d is empty and `mkinitcpio -P` fails outright with "No
+# presets found". Worse, the mkinitcpio on PATH there is an interactive
+# wrapper from limine-mkinitcpio-hook that prompts before doing anything --
+# never acceptable from a scriptlet -- and a scriptlet's PATH does not include
+# /usr/local/bin anyway, so it would silently hit the real binary and fail.
+_rebuild_boot_image() {
+    if [ -x /usr/bin/limine-mkinitcpio ]; then
+        echo ":: rebuilding the boot image (limine-mkinitcpio)..."
+        /usr/bin/limine-mkinitcpio
+    elif ls /etc/mkinitcpio.d/*.preset >/dev/null 2>&1; then
+        echo ":: rebuilding the boot image (mkinitcpio -P)..."
+        /usr/bin/mkinitcpio -P
+    else
+        cat <<'WARN'
+:: WARNING: could not work out how to rebuild the boot image.
+::          The theme is installed and set as the default, but the passphrase
+::          prompt will keep using the old one until the initramfs is
+::          regenerated. Run whatever your bootloader needs.
+WARN
+    fi
+}
+
 _activate() {
     _ensure_device_scale
     plymouth-set-default-theme "$_theme"
-    echo ":: rebuilding the boot image so the LUKS prompt picks up the theme..."
-    mkinitcpio -P
+    _rebuild_boot_image
 }
 
 post_install() {
     _activate
     cat <<'MSG'
 
-  Installed. The theme is generated for a 2880x1800 panel; for a different
-  screen edit W, H and SCALE in build-theme.py and rebuild the package.
+  Installed. The assets were rendered for the display this was built on;
+  edit theme.conf (name, resolution, background word) and rebuild to change
+  any of it.
 
-  Roll back to the stock Omarchy screen at any time with:
-      sudo plymouth-set-default-theme omarchy && sudo mkinitcpio -P
+  Roll back to the stock Omarchy screen with:
+      sudo plymouth-set-default-theme omarchy
+  followed by your bootloader's initramfs rebuild. Removing this package
+  does both for you.
 
 MSG
 }
@@ -53,5 +81,5 @@ pre_remove() {
 }
 
 post_remove() {
-    mkinitcpio -P || true
+    _rebuild_boot_image || true
 }

@@ -172,6 +172,18 @@ That produced an infinite loop once.
 simulations used to agree on a design before baking it into the boot image.
 They carry the same `SCALE` as the generator; keep them in sync.
 
+## Rebuilding the boot image is not always `mkinitcpio -P`
+
+On a Limine + UKI system there are no mkinitcpio presets at all:
+`/etc/mkinitcpio.d` is empty and `mkinitcpio -P` fails with "No presets
+found". The `mkinitcpio` on PATH there is an interactive wrapper from
+`limine-mkinitcpio-hook` that prompts before doing anything, and a pacman
+scriptlet's PATH excludes `/usr/local/bin`, so it silently reaches the real
+binary and fails. The install scriptlet therefore prefers
+`/usr/bin/limine-mkinitcpio`, falls back to `/usr/bin/mkinitcpio -P` when
+presets exist, and warns loudly if neither applies rather than pretending it
+worked.
+
 ## Rollback
 
 ```bash

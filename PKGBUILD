@@ -7,7 +7,7 @@
 
 pkgname=omarchy-plymouth-nier
 pkgver=1.0.0
-pkgrel=1
+pkgrel=2
 pkgdesc="NieR-inspired Plymouth theme for the Omarchy LUKS unlock and shutdown screens"
 arch=('any')
 url="https://github.com/Willi005/omarchy-plymouth-nier"
