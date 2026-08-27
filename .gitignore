@@ -12,3 +12,6 @@
 # python bytecode from importing the generator
 __pycache__/
 *.pyc
+
+# build output of build-limine.py when run in the repo root
+/limine/

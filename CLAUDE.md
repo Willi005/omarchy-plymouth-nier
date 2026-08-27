@@ -199,3 +199,115 @@ rather than blocking boot, so a bad theme is recoverable without rescue media.
 
 The disk stays decrypted across suspend; only a real power-off and boot runs
 the LUKS prompt again. There is no shortcut for testing this screen.
+
+
+---
+
+# The Limine boot menu
+
+Since 1.1.0 the package also themes the bootloader menu — the screen before the
+LUKS prompt. It is a completely different engine from Plymouth and almost
+nothing above applies to it.
+
+## What Limine can and cannot do
+
+A full-screen `wallpaper` (BMP/PNG/JPEG/QOI), a 16-colour palette, `term_margin`,
+`term_font_scale`, `interface_branding`, and a transparent terminal background.
+No animation, and — the one that shapes the whole design — **no antialiased
+text**: `term_font` needs a CP437 bitmap and Limine "assumes all fonts are of
+width 8", one byte per glyph row. The terminal is a 1-bit blitter. There is no
+smooth-text setting at any resolution, so the theme keeps Limine's built-in font.
+
+Three things worth not rediscovering:
+
+- **`term_background` is `TTRRGGBB` where `TT=00` is OPAQUE and `TT=FF` is fully
+  transparent** — the reverse of the usual ARGB convention. `colour_blend()` in
+  `common/lib/gterm.c` computes `alpha = 255 - A(fg)`. Limine's own default,
+  `default_bg = 0x00000000`, is opaque black, which confirms it.
+- **The menu draws no box.** The `┌─┤ %s ├─┐` frame in the binary belongs to the
+  *editor*. Entries float, and `interface_branding` gets its own centred row.
+- **The menu centres itself on both axes** — `(cols - max_tree_len - 3)/2` and
+  `(rows - max_tree_height)/2` in `common/menu.c`. Nothing to configure, and
+  nothing can override it.
+
+`wallpaper` may appear several times; Limine picks one at random per boot
+(`config_get_value(config, rand32() % wallpaper_count, "WALLPAPER")`). Unused so
+far, but it is the only way to get variation on this screen.
+
+## Preview it before committing — this one actually can be
+
+Unlike Plymouth, Limine is an ordinary EFI binary and boots in a VM:
+
+```bash
+sudo pacman -S --needed qemu-system-x86 edk2-ovmf
+mkdir -p esp/EFI/BOOT esp/omarchy-nier
+cp /usr/share/limine/BOOTX64.EFI esp/EFI/BOOT/BOOTX64.EFI
+cp /usr/share/omarchy-plymouth-nier/limine/bg.png esp/omarchy-nier/bg.png
+cp /boot/limine.conf esp/limine.conf          # the real one works as-is
+cp /usr/share/edk2/x64/OVMF_VARS.4m.fd vars.fd
+
+{ sleep 25; echo "screendump out.ppm"; sleep 5; echo quit; } | \
+qemu-system-x86_64 -machine q35 -m 512 \
+  -drive if=pflash,format=raw,readonly=on,file=/usr/share/edk2/x64/OVMF_CODE.4m.fd \
+  -drive if=pflash,format=raw,file=vars.fd \
+  -drive file=fat:rw:esp,format=raw \
+  -vga none -device VGA,xres=2880,yres=1800,vgamem_mb=64 \
+  -display none -monitor stdio > qemu.log 2>&1
+```
+
+`vgamem_mb=64` is not optional at 2880x1800: 20.7 MB of framebuffer does not fit
+in the 16 MB default and the native mode never appears.
+
+Reading the source was not enough. Only booting it revealed a **second help row**
+(`S Firmware Setup    B Blank Entry`) and that an entry's `comment:` is drawn at
+the *bottom* of the screen above the countdown, not beside the entry — which is
+why palette index 6 (cyan, how `menu.c` prints it) is deliberately set to chrome.
+
+## How the config is spliced
+
+`limine.conf` is a global header followed by entries; every entry starts at
+column 0 with a slash. The scriptlet only ever rewrites the header, so
+`limine-entry-tool` and `limine-snapper-sync` keep their territory.
+
+- The block sits between `### >>> omarchy-nier >>>` markers, so re-applying
+  replaces rather than accumulates. Verified idempotent over three applies.
+- Written to a temp file on the same filesystem and renamed — a failure halfway
+  cannot leave a half-written bootloader config.
+- The stock header is kept at `<esp>/limine.conf.omarchy-nier.bak`; revert
+  restores it **bit for bit**, tested round-trip on the live file.
+- Removing a key also removes the comment above it, so revert does not leave
+  `# Terminal colors (Tokyo Night palette)` hanging over nothing.
+- `ENABLE_ENROLL_LIMINE_CONFIG` is honoured: if enrolment is on, editing
+  `limine.conf` without re-enrolling **stops the machine booting**, so the
+  scriptlet runs `limine-enroll-config`. It is off on this system.
+
+No initramfs rebuild is needed — Limine reads `limine.conf` at boot.
+
+## Geometry
+
+`build-limine.py` writes the PNG by hand with `zlib` and `struct` rather than
+shelling out to ImageMagick; a flat field with eight rectangles did not justify
+the dependency. Everything is a fraction of the screen's **shorter side**, never
+a pixel count:
+
+| quantity | value |
+|---|---|
+| bracket inset | `min(W,H) * 0.030` |
+| bracket arm | `min(W,H) * 0.065` |
+| bracket thickness | `max(2, min(W,H) * 0.0028)` |
+| `term_margin` | `round(H * 0.036)` |
+| `term_font_scale` | `min(8, max(2, round(W / 960)))` |
+
+The font scale replaced an earlier `round(H/900)`, which returned 1x on 1080p and
+rendered the menu unreadably small. The current formula targets ~115 columns and
+yields 81-115 from 1366x768 to 3840x2160.
+
+## Rollback
+
+`pacman -R omarchy-plymouth-nier` restores the stock header and removes the
+wallpaper. By hand:
+
+```bash
+sudo cp /boot/limine.conf.omarchy-nier.bak /boot/limine.conf   # header only, if entries changed
+sudo rm -rf /boot/omarchy-nier
+```

@@ -1,0 +1,455 @@
+<title>Cargador Omarchy</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@200;400;700&family=Noto+Sans+JP:wght@300;500&display=swap">
+
+<style>
+  :root {
+    --ground:#050505; --bone:#CFC9B0; --dim:#4A4638; --chrome:#55503F;
+    --chrome-hi:#8C8770; --rust:#B0563F; --panel:#0A0A08; --line:#16150F;
+    --mono:"JetBrains Mono",ui-monospace,SFMono-Regular,Menlo,monospace;
+  }
+  * { box-sizing:border-box; }
+  html,body { height:100%; }
+  body {
+    margin:0; background:var(--ground); color:var(--bone);
+    font-family:var(--mono); display:flex; flex-direction:column; overflow:hidden;
+  }
+
+  /* la muestra tipografica existe para que el navegador cargue las dos familias:
+     un lienzo por si solo nunca dispara la descarga de una webfont */
+  #warm {
+    position:absolute; left:-9999px; top:0; visibility:hidden;
+    font-family:"JetBrains Mono",monospace;
+  }
+  #warm i { font-family:"Noto Sans JP",sans-serif; font-style:normal; }
+
+  #screen { flex:1; min-height:0; position:relative; background:#000; }
+  canvas { display:block; width:100%; height:100%; }
+
+  #hud {
+    position:absolute; left:0; right:0; bottom:0; padding:.55rem .95rem;
+    font-size:.58rem; letter-spacing:.24em; text-transform:uppercase;
+    color:var(--chrome); display:flex; justify-content:space-between;
+    gap:1rem; pointer-events:none;
+  }
+  #hud b { color:var(--chrome-hi); font-weight:400; }
+
+  /* ---- todo lo de abajo esta deliberadamente fuera de la ilusion ---- */
+  #controls {
+    display:flex; flex-wrap:wrap; align-items:center; gap:.8rem 1.4rem;
+    padding:.75rem 1.05rem; border-top:1px solid var(--line);
+    background:var(--panel); font-size:.7rem;
+  }
+  .ctl { display:flex; align-items:center; gap:.4rem; }
+  .ctl > span {
+    text-transform:uppercase; letter-spacing:.2em; color:var(--chrome);
+    font-size:.56rem; white-space:nowrap;
+  }
+  button {
+    font:inherit; font-size:.62rem; letter-spacing:.13em; text-transform:uppercase;
+    background:transparent; color:var(--chrome); border:1px solid var(--line);
+    padding:.28rem .52rem; cursor:pointer;
+    transition:border-color .15s, color .15s, background .15s;
+  }
+  button:hover { border-color:var(--chrome); color:var(--bone); }
+  button[aria-pressed="true"] { border-color:var(--bone); color:var(--bone); background:#13120D; }
+  button:focus-visible { outline:1px solid var(--rust); outline-offset:2px; }
+
+  #notes {
+    background:var(--panel); border-top:1px solid var(--line);
+    padding:.7rem 1.05rem .95rem; color:var(--chrome);
+    font-size:.66rem; line-height:1.75; overflow-y:auto; max-height:8.5rem;
+  }
+  #notes p { margin:0 0 .3rem; }
+  #notes b { color:var(--bone); font-weight:400; }
+  #notes code { color:var(--chrome-hi); }
+  #notes .tag { color:var(--rust); letter-spacing:.18em; text-transform:uppercase; font-size:.56rem; }
+</style>
+
+<div id="warm">JetBrains Mono 0123 <i>システム ｱｲｳ</i></div>
+
+<div id="screen">
+  <canvas id="cv"></canvas>
+  <div id="hud"><span id="hudL"></span><span id="hudR">↑↓ mover · ← → plegar · enter arrancar · esc volver</span></div>
+</div>
+
+<div id="controls">
+  <div class="ctl"><span>Variante</span>
+    <button data-v="A">A escena</button>
+    <button data-v="B">B desnudo</button>
+    <button data-v="C">C sala vacía</button>
+  </div>
+  <div class="ctl"><span>Resolución</span>
+    <button data-r="2880x1800">2880×1800</button>
+    <button data-r="1920x1080">1920×1080</button>
+    <button data-r="3840x2160">3840×2160</button>
+    <button data-r="1366x768">1366×768</button>
+  </div>
+  <div class="ctl"><span>Siembra</span><button id="seed">otra</button></div>
+  <div class="ctl"><span>Render</span>
+    <button data-b="1">bitmap 8×16</button><button data-b="0">suave</button>
+  </div>
+  <div class="ctl"><span>Escala</span>
+    <button data-s="0">auto</button><button data-s="2">2×</button><button data-s="3">3×</button>
+  </div>
+  <div class="ctl"><span>Ayuda</span>
+    <button data-h="1">visible</button><button data-h="0">oculta</button>
+  </div>
+  <div class="ctl"><span>Margen</span>
+    <button data-m="0.036">estrecho</button><button data-m="0.105">ancho</button>
+  </div>
+</div>
+
+<div id="notes">
+  <p><span class="tag">Fiel</span> La lista va centrada en horizontal y vertical porque
+  <code>menu.c</code> la centra: <code>(cols - max_tree_len - 3)/2</code> y
+  <code>(rows - max_tree_height)/2</code>. Los corchetes de esquina usan la misma geometría que
+  el HUD del login (<code>build-theme.py</code>): cuatro L sueltas, brazo y margen como
+  <b>porcentaje de la dimensión menor</b> de la pantalla, nunca un rectángulo trazado ni un
+  valor fijo en px — así el corchete guarda la misma proporción visual en cualquier resolución.</p>
+  <p><span class="tag">Límite</span> Limine <b>asume 8 px de ancho por glifo</b>, siempre: una
+  fuente propia solo puede ser un bitmap de 8×N y <code>term_font_scale</code> la amplía con vecino
+  más cercano. El modo <b>bitmap</b> es lo que verás de verdad; el modo <b>suave</b> muestra la
+  misma rejilla con JetBrains sin cuantizar, para comparar lo que se pierde.</p>
+  <p><span class="tag">Verificado</span> Esta pantalla ya no es una conjetura: arranca bajo QEMU
+  con OVMF y se compara con la captura real. De ahí salieron la segunda fila de ayuda
+  (<code>S Firmware Setup</code>), el <code>comment:</code> dibujado al pie en vez de junto a la
+  entrada, y la fórmula de escala.</p>
+</div>
+
+<script>
+(() => {
+  const cv = document.getElementById('cv');
+  const ctx = cv.getContext('2d', { alpha: false });
+  const hudL = document.getElementById('hudL');
+
+  const GROUND = '#050505', BONE = '#CFC9B0', DIM = '#4A4638';
+  const CHROME = '#55503F', CHROME_HI = '#8C8770';
+  const KATA = 'ｱｲｳｴｵｶｷｸｹｺｻｼｽｾｿﾀﾁﾂﾃﾄﾅﾆﾇﾈﾉﾊﾋﾌﾍﾎﾏﾐﾑﾒﾓﾔﾕﾖﾗﾘﾙﾚﾛﾜﾝ';
+  const COLUMN = 'ｼｽﾃﾑ';
+  const JP = '"Noto Sans JP","Noto Sans CJK JP",sans-serif';
+  const JB = '"JetBrains Mono",monospace';
+
+  const NAMES = { A:'variante a · escena continua', B:'variante b · terminal desnudo',
+                  C:'variante c · sala vacía' };
+
+  const S = { variant:'B', seed:7, bitmap:true, scale:0, help:true, marginRatio:0.036,
+              sel:1, snap:false, booted:false, count:5, VW:2880, VH:1800 };
+
+  // todas las medidas se escriben para una pantalla de 1800 px de alto y se
+  // multiplican por RES, igual que hace build-theme.py
+  const RES = () => S.VH / 1800;
+
+  const rng = a => () => {
+    a |= 0; a = a + 0x6D2B79F5 | 0;
+    let t = Math.imul(a ^ a >>> 15, 1 | a);
+    t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t;
+    return ((t ^ t >>> 14) >>> 0) / 4294967296;
+  };
+
+    // apunta a ~115 columnas. Un round(alto/900) anterior daba 1x en 1080p y el
+  // menu salia ilegible de pequeno; verificado en QEMU a 1080p y a 2880x1800.
+  const fontScale = () => S.scale || Math.min(8, Math.max(2, Math.round(S.VW / 960)));
+
+  /* ---------------------------------------------------------------- menu */
+  function lines() {
+    const L = [
+      { pre:'[-]',   name:'Omarchy' },
+      { pre:' ├──►', name:'linux' },
+      { pre:' └' + (S.snap ? '[-]' : '[+]'), name:'Snapshots' }
+    ];
+    if (S.snap) L.push({ pre:'   └──►', name:'1 │ 2026-08-19 23:31:30' });
+    L.push({ pre:'   ', name:'Windows Boot Manager' });
+    return L;
+  }
+
+  /* ------------------------------------------------- corchetes de esquina */
+  // misma geometria que el HUD del login (build-theme.py: make_bracket, br_arm
+  // = min(w,h) * 0.07, grosor 2px, opacidad 0.28): cuatro L sueltas, nunca un
+  // rectangulo trazado. El margen es proporcion de la dimension menor, no un
+  // numero fijo de px, para que no quede "pegado" en 1366x768 ni "perdido" en
+  // 3840x2160.
+  function frame() {
+    const short = Math.min(S.VW, S.VH);
+    const inset = short * 0.030;
+    const arm = short * 0.065;
+    const thick = Math.max(2, short * 0.0028);
+    const x0 = inset, y0 = inset, x1 = S.VW - inset, y1 = S.VH - inset;
+
+    ctx.fillStyle = BONE;
+    ctx.globalAlpha = 0.30;
+    for (const [cx, cy, sx, sy] of [[x0, y0, 1, 1], [x1, y0, -1, 1],
+                                    [x0, y1, 1, -1], [x1, y1, -1, -1]]) {
+      ctx.fillRect(cx - (sx < 0 ? thick : 0), cy - (sy < 0 ? thick : 0), sx * arm, thick);
+      ctx.fillRect(cx - (sx < 0 ? thick : 0), cy - (sy < 0 ? thick : 0), thick, sy * arm);
+    }
+    ctx.globalAlpha = 1;
+  }
+
+  /* ----------------------------------------------------------- wallpaper */
+  function wallpaper(k) {
+    const res = RES();
+    ctx.save();
+    ctx.scale(k, k);
+    ctx.fillStyle = GROUND;
+    ctx.fillRect(0, 0, S.VW, S.VH);
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+
+    if (S.variant !== 'B') {
+      // palabra fantasma: se encoge si excediera el 55 % del ancho
+      let pt = 300 * res;
+      ctx.font = `300 ${pt}px ${JP}`;
+      const wide = ctx.measureText('システム').width;
+      if (wide > S.VW * 0.55) { pt *= (S.VW * 0.55) / wide; }
+      ctx.save();
+      ctx.filter = `blur(${2.4 * res}px)`;
+      ctx.fillStyle = DIM;
+      ctx.font = `300 ${pt}px ${JP}`;
+      ctx.fillText('システム', S.VW / 2, S.VH * 0.50);
+      ctx.restore();
+
+      // campo ambiente
+      const r = rng(S.seed * 7919 + 13);
+      const n = S.variant === 'A' ? 45 : 17;
+      const boxes = [30 * res, 39 * res, 48 * res];
+      for (let i = 0; i < n; i++) {
+        const box = boxes[(r() * 3) | 0];
+        const x = S.variant === 'A'
+          ? (0.03 + r() * 0.92) * S.VW
+          : (r() < 0.5 ? (0.04 + r() * 0.24) * S.VW : (0.64 + r() * 0.32) * S.VW);
+        const y = (0.07 + r() * 0.86) * S.VH;
+        ctx.globalAlpha = 0.13 + r() * 0.23;
+        ctx.fillStyle = BONE;
+        ctx.font = `${box}px ${JP}`;
+        ctx.fillText(KATA[(r() * KATA.length) | 0], x, y);
+      }
+      ctx.globalAlpha = 1;
+
+      // columna vertical, solo en A
+      if (S.variant === 'A') {
+        const r2 = rng(S.seed * 104729);
+        ctx.font = `${74 * res}px ${JP}`;
+        for (let i = 0; i < COLUMN.length; i++) {
+          ctx.globalAlpha = 0.10 + r2() * 0.06;
+          ctx.fillStyle = BONE;
+          ctx.fillText(COLUMN[i], S.VW * 0.80, S.VH * 0.30 + i * 85 * res);
+        }
+        ctx.globalAlpha = 1;
+      }
+    }
+
+    frame();
+    ctx.restore();
+  }
+
+  /* ---------------------------------- modelo de la pantalla de la terminal */
+  function cells(cols, rows) {
+    const out = [];
+    const mid = str => Math.max(0, Math.floor((cols - str.length) / 2));
+
+    out.push({ c:mid('OMARCHY'), r:1, s:'OMARCHY', col:BONE });
+    if (S.help) {
+      // dos filas: la segunda no aparece en menu.c, salio del arranque real
+      const h1 = 'ARROWS Select    ENTER Boot    E Edit';
+      const h2 = 'S Firmware Setup    B Blank Entry';
+      out.push({ c:mid(h1), r:3, s:h1, col:CHROME });
+      out.push({ c:mid(h2), r:5, s:h2, col:CHROME });
+    }
+
+    // menu.c centra el bloque en ambos ejes
+    const L = lines();
+    const full = L.map(e => e.pre + ' ' + e.name);
+    const maxLen = Math.max(...full.map(s => s.length));
+    const prefix = cols > maxLen + 3 ? Math.floor((cols - maxLen - 3) / 2) : 1;
+    const header = S.help ? 7 : 3;
+    const start = Math.max(Math.floor((rows - L.length) / 2), 4 + header);
+
+    L.forEach((e, i) => {
+      const r = start + i;
+      if (i === S.sel) {
+        out.push({ c:prefix, r, s:full[i], col:GROUND, invert:true });
+      } else {
+        out.push({ c:prefix, r, s:e.pre, col:CHROME });
+        out.push({ c:prefix + e.pre.length + 1, r, s:e.name, col:BONE });
+      }
+    });
+
+    // menu.c imprime el comment: de la entrada como \e[36m, y aterriza al pie
+    // de la pantalla, no junto a la entrada
+    const note = 'Kernel version: 7.1.8-arch1-3';
+    out.push({ c:mid(note), r:rows - 3, s:note, col:CHROME });
+
+    if (S.count > 0) {
+      const a = 'Booting automatically in ', b = String(S.count), c = '...';
+      const col0 = mid(a + b + c);
+      out.push({ c:col0, r:rows - 2, s:a, col:CHROME });
+      out.push({ c:col0 + a.length, r:rows - 2, s:b, col:CHROME_HI });
+      out.push({ c:col0 + a.length + b.length, r:rows - 2, s:c, col:CHROME });
+    }
+    return out;
+  }
+
+  function paintCells(g, list, cw, ch, fontPx) {
+    g.textBaseline = 'alphabetic';
+    g.textAlign = 'left';
+    g.font = `${fontPx}px ${JB}`;
+    for (const it of list) {
+      if (it.invert) {
+        g.fillStyle = BONE;
+        g.fillRect(it.c * cw, it.r * ch, it.s.length * cw, ch);
+      }
+      g.fillStyle = it.col;
+      for (let i = 0; i < it.s.length; i++) {
+        g.fillText(it.s[i], (it.c + i) * cw, it.r * ch + ch * 0.76);
+      }
+    }
+  }
+
+  /* ---------------------------------------------- primer plano: plymouth */
+  function plymouth(k) {
+    const res = RES();
+    ctx.save();
+    ctx.scale(k, k);
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+
+    ctx.fillStyle = BONE;
+    ctx.font = `${40 * res}px ${JB}`;
+    ctx.fillText('Welcome, Guillermo', S.VW / 2, S.VH * 0.50 - 62 * res);
+
+    const w = S.VW * 0.243, x0 = S.VW / 2 - w / 2, y = S.VH * 0.50 + 34 * res;
+    for (let i = 0; i < 7; i++) {
+      const a = Math.round(x0 + w * i / 7), b = Math.round(x0 + w * (i + 1) / 7);
+      ctx.fillRect(a, y, b - a, Math.max(2, 3 * res));
+    }
+    for (let i = 0; i < 5; i++) {
+      ctx.beginPath();
+      ctx.arc(S.VW / 2 + (i - 2) * 22 * res, y - 20 * res, 4.5 * res, 0, 6.2832);
+      ctx.fill();
+    }
+
+    ctx.fillStyle = CHROME;
+    ctx.font = `${19 * res}px ${JB}`;
+    ctx.letterSpacing = `${4 * res}px`;
+    ctx.fillText('TYPE A PASSWORD  ·  ENTER TO UNLOCK', S.VW / 2, S.VH * 0.895);
+    ctx.letterSpacing = '0px';
+    ctx.restore();
+  }
+
+  /* ------------------------------------------------------------- pintado */
+  function draw() {
+    const r = cv.getBoundingClientRect();
+    const dpr = Math.min(window.devicePixelRatio || 1, 2);
+    const w = Math.max(1, Math.round(r.width * dpr));
+    const h = Math.max(1, Math.round(r.height * dpr));
+    if (cv.width !== w || cv.height !== h) { cv.width = w; cv.height = h; }
+
+    ctx.fillStyle = '#000';
+    ctx.fillRect(0, 0, w, h);
+
+    const k = Math.min(w / S.VW, h / S.VH);
+    ctx.save();
+    ctx.translate((w - S.VW * k) / 2, (h - S.VH * k) / 2);
+
+    wallpaper(k);
+
+    if (S.booted) {
+      plymouth(k);
+    } else {
+      const sc = fontScale();
+      const m = S.marginRatio * S.VH;
+      if (S.bitmap) {
+        // un solo salto entero: el bitmap de 8×16 se amplia sin fracciones
+        const pix = Math.max(1, Math.round(sc * k));
+        const cols = Math.floor((S.VW - 2 * m) * k / (8 * pix));
+        const rows = Math.floor((S.VH - 2 * m) * k / (16 * pix));
+        const oc = document.createElement('canvas');
+        oc.width = cols * 8; oc.height = rows * 16;
+        const o = oc.getContext('2d');
+        paintCells(o, cells(cols, rows), 8, 16, 13);
+
+        // cuantizado a 1 bit: asi se comporta una fuente CP437 de verdad
+        const img = o.getImageData(0, 0, oc.width, oc.height);
+        const d = img.data;
+        for (let i = 3; i < d.length; i += 4) d[i] = d[i] > 110 ? 255 : 0;
+        o.putImageData(img, 0, 0);
+
+        ctx.imageSmoothingEnabled = false;
+        ctx.drawImage(oc, 0, 0, oc.width, oc.height,
+                      Math.round(m * k), Math.round(m * k),
+                      oc.width * pix, oc.height * pix);
+        ctx.imageSmoothingEnabled = true;
+      } else {
+        const cw = 8 * sc * k, ch = 16 * sc * k;
+        const cols = Math.floor((S.VW - 2 * m) * k / cw);
+        const rows = Math.floor((S.VH - 2 * m) * k / ch);
+        ctx.save();
+        ctx.translate(m * k, m * k);
+        paintCells(ctx, cells(cols, rows), cw, ch, 13 * sc * k);
+        ctx.restore();
+      }
+    }
+    ctx.restore();
+
+    hudL.innerHTML = S.booted
+      ? 'plymouth · <b>el fondo no ha cambiado</b>'
+      : `${NAMES[S.variant]} · ${S.VW}×${S.VH} · escala ${fontScale()}×`;
+  }
+
+  /* ------------------------------------------------------------ controles */
+  const press = (sel, test) =>
+    document.querySelectorAll(sel).forEach(b => b.setAttribute('aria-pressed', test(b)));
+
+  const sync = () => {
+    press('[data-v]', b => b.dataset.v === S.variant);
+    press('[data-r]', b => b.dataset.r === `${S.VW}x${S.VH}`);
+    press('[data-b]', b => (b.dataset.b === '1') === S.bitmap);
+    press('[data-s]', b => +b.dataset.s === S.scale);
+    press('[data-h]', b => (b.dataset.h === '1') === S.help);
+    press('[data-m]', b => +b.dataset.m === S.marginRatio);
+    draw();
+  };
+
+  const on = (sel, fn) =>
+    document.querySelectorAll(sel).forEach(b => b.onclick = () => { fn(b); sync(); });
+
+  on('[data-v]', b => { S.variant = b.dataset.v; S.booted = false; });
+  on('[data-r]', b => { const [a, c] = b.dataset.r.split('x'); S.VW = +a; S.VH = +c; });
+  on('[data-b]', b => { S.bitmap = b.dataset.b === '1'; });
+  on('[data-s]', b => { S.scale = +b.dataset.s; });
+  on('[data-h]', b => { S.help = b.dataset.h === '1'; });
+  on('[data-m]', b => { S.marginRatio = +b.dataset.m; });
+  document.getElementById('seed').onclick = () => { S.seed = (Math.random() * 1e6) | 0; sync(); };
+
+  addEventListener('keydown', e => {
+    const L = lines();
+    if (e.key === 'ArrowDown') { S.sel = (S.sel + 1) % L.length; S.count = 0; }
+    else if (e.key === 'ArrowUp') { S.sel = (S.sel - 1 + L.length) % L.length; S.count = 0; }
+    else if (e.key === 'ArrowRight' || e.key === 'ArrowLeft') { S.snap = !S.snap; S.count = 0; }
+    else if (e.key === 'Enter') { S.booted = true; S.count = 0; }
+    else if (e.key === 'Escape') { S.booted = false; }
+    else return;
+    e.preventDefault();
+    draw();
+  });
+
+  const tick = setInterval(() => {
+    if (S.count > 0 && !S.booted) { S.count--; draw(); }
+    if (S.count === 0) clearInterval(tick);
+  }, 1000);
+
+  new ResizeObserver(draw).observe(cv);
+
+  // un lienzo no dispara la descarga de una webfont: hay que pedirla a mano
+  const faces = ['400 13px "JetBrains Mono"', '300 300px "Noto Sans JP"',
+                 '400 48px "Noto Sans JP"'];
+  const ready = document.fonts
+    ? Promise.all(faces.map(f => document.fonts.load(f).catch(() => {})))
+        .then(() => document.fonts.ready)
+    : Promise.resolve();
+  ready.then(sync).catch(sync);
+  sync();
+})();
+</script>
