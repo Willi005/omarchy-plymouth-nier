@@ -326,3 +326,86 @@ wallpaper. By hand:
 sudo cp /boot/limine.conf.omarchy-nier.bak /boot/limine.conf   # header only, if entries changed
 sudo rm -rf /boot/omarchy-nier
 ```
+
+
+---
+
+# Configuration and distribution (1.3.0)
+
+## One config file, read by both generators
+
+`/etc/omarchy-plymouth-nier.conf`, installed from the repo's `theme.conf` and
+listed in `backup=()` so pacman keeps user edits and leaves a `.pacnew`. Both
+generators read it through `nierconf.py` rather than each parsing it their own
+way, so the Plymouth screens and the Limine menu cannot disagree about a colour.
+
+`nierconf` prefers `/etc/omarchy-plymouth-nier.conf` over the repo's
+`theme.conf`, which has a useful consequence: **rebuilding from source on a
+machine that already has the theme automatically honours that machine's
+config.** Keeping that one file in dotfiles is enough to reproduce the theme.
+
+Environment overrides are `NIER_<KEY>`; `PLYMOUTH_<KEY>` still works so older
+invocations do not break.
+
+Validation fails loudly and names the key. A boot theme that renders with a
+silently substituted colour is worse than one that refuses to build. Colours
+must be `#RRGGBB` or `#RGB`; counts non-negative; `STACK_MIN <= STACK_MAX`;
+fractions in range. `SCALE` is clamped rather than refused because it degrades
+gradually. Unknown keys warn only, so a newer config cannot break an older
+install.
+
+Two things that are derived rather than configured, because they only ever need
+to track something else:
+
+- The RGB literal in `display_message_callback` — the one colour not baked into
+  a PNG — is computed from `BONE`.
+- Limine's bright chrome step is `CHROME * 1.65`, saturating.
+
+`COLUMN` empty means "derive from `GHOST_WORD`": the fullwidth word is mapped
+back to halfwidth through the alphabet with NFKC, so `システム` yields `ｼｽﾃﾑ`.
+
+## omarchy-nier-reconfigure
+
+Regenerates into a temp directory and swaps in only on success, so a config that
+fails to build leaves the working theme untouched. `--dry-run` validates and
+reports, and runs as a normal user.
+
+Two bugs worth not reintroducing, both found by running it:
+
+- Under `set -e` with `pipefail`, `diff` exiting 1 **is** the interesting case.
+  Every comparison in the dry-run needs `|| true` or an `if`, or the script
+  dies exactly when it has something to report.
+- `built-for` must be installed beside the generators and **refreshed on every
+  reconfigure**, not dropped into the theme directory. Leaving it in the theme
+  directory adds a stray file; not refreshing it makes the installer's
+  "was this built for another screen?" check go stale after the first
+  reconfigure.
+
+ImageMagick and the fonts stay `makedepends` with `optdepends` entries: ~150 MB
+of hard runtime dependencies for a boot theme would be rude when most people
+never reconfigure. The command checks and names exactly what is missing.
+
+## The binary-package problem
+
+Artwork is rasterised for one panel, and `Image.Scale` is nearest-neighbour, so
+a prebuilt package looks wrong on a different screen. `build-theme.py` writes
+`built-for`; the scriptlet compares it against the largest connected display
+from `/sys/class/drm` and re-runs the reconfigure when they differ and the tools
+are present, warning clearly when they are not.
+
+## Shared splice
+
+`limine-splice.sh` is sourced by the pacman scriptlet, by `install.sh` and by
+the reconfigure command. One implementation, three callers, no drift.
+
+## Distribution
+
+The AUR is frozen: registrations closed June 2026 after ~1,500 packages were
+hit, reopened 13 July, adoption disabled 30 July, **all pushes paused 1
+August** after a third wave. `aur/sync.sh` rewrites three lines of the
+canonical PKGBUILD -- the source array, the checksums, and `_src` -- and
+regenerates `.SRCINFO`, so the AUR flavour cannot drift from this one. Pushing
+is one command from the day it reopens.
+
+Deliberately not offered: a `curl … | bash` bootstrap. It saves two commands and
+it is precisely the supply-chain shape that froze the AUR.

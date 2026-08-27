@@ -13,96 +13,26 @@ which requires DeviceScale=1 in /etc/plymouth/plymouthd.conf. Without that,
 Plymouth's HiDPI heuristic (DPI = width*254/(10*(width_mm+1)) > 96) picks
 device scale 2, halves the logical window and upscales every image 2x.
 
-Settings come from theme.conf next to this file, overridable per-variable by
-the environment as PLYMOUTH_NAME / PLYMOUTH_RESOLUTION / PLYMOUTH_GHOST_WORD.
+Settings come from nierconf, which reads /etc/omarchy-plymouth-nier.conf when
+it exists and theme.conf next to this file otherwise, with NIER_<KEY> in the
+environment beating both.
 
 Usage: build-theme.py <output-dir>
 """
 
-import glob
-import os
-import pwd
 import subprocess
 import sys
 from pathlib import Path
 
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+import nierconf
+
 HERE = Path(__file__).resolve().parent
+CONF = nierconf.load()
 
 # The composition was designed on a 1800px-tall screen; every pointsize below
 # is in pixels for that height and gets multiplied by RES for the real one.
 DESIGN_HEIGHT = 1800
-
-
-def load_conf():
-    conf = {}
-    path = HERE / "theme.conf"
-    if path.exists():
-        for line in path.read_text().splitlines():
-            line = line.strip()
-            if not line or line.startswith("#") or "=" not in line:
-                continue
-            k, _, v = line.partition("=")
-            conf[k.strip()] = v.strip()
-    for key in ("NAME", "RESOLUTION", "GHOST_WORD"):
-        env = os.environ.get("PLYMOUTH_" + key)
-        if env:
-            conf[key] = env
-    return conf
-
-
-CONF = load_conf()
-
-
-def account_name():
-    """Real name if the account has one, otherwise the login name."""
-    try:
-        entry = pwd.getpwuid(os.getuid())
-    except KeyError:
-        return "there"
-    gecos = (entry.pw_gecos or "").split(",")[0].strip()
-    if gecos:
-        return gecos.split()[0]
-    return entry.pw_name.capitalize()
-
-
-def detect_resolution():
-    """Preferred mode of the largest connected display, straight from DRM.
-
-    /sys/class/drm/*/modes is readable with no session and no X/Wayland
-    connection, which matters because this may run from a package build.
-    """
-    best = None
-    for path in sorted(glob.glob("/sys/class/drm/*/modes")):
-        try:
-            first = open(path).readline().strip()
-        except OSError:
-            continue
-        if "x" not in first:
-            continue
-        try:
-            w, h = (int(n) for n in first.split("x", 1))
-        except ValueError:
-            continue
-        if best is None or w * h > best[0] * best[1]:
-            best = (w, h)
-    return best
-
-
-def resolution():
-    want = CONF.get("RESOLUTION", "auto").lower()
-    if want and want != "auto":
-        try:
-            w, h = (int(n) for n in want.split("x", 1))
-            return w, h
-        except ValueError:
-            sys.exit(f"theme.conf: RESOLUTION must be auto or WxH, got {want!r}")
-    found = detect_resolution()
-    if found:
-        return found
-    print("warning: no connected display found in /sys/class/drm; assuming "
-          "1920x1080. Set RESOLUTION in theme.conf if that is wrong.",
-          file=sys.stderr)
-    return 1920, 1080
 
 
 def font_file(family, needle, package):
@@ -127,25 +57,26 @@ CJK = font_file("Noto Sans CJK JP", "Noto Sans CJK", "noto-fonts-cjk")
 JB = font_file("JetBrainsMono Nerd Font", "JetBrainsMono",
                "ttf-jetbrains-mono-nerd")
 
-BONE = "#CFC9B0"     # NieR bone, everything the eye should read
-DIM = "#4A4638"      # ghost word only
-CHROME = "#55503F"   # bottom hint
-RUST = "#B0563F"     # the only chromatic note, and only while a key is rejected
+# The whole palette is shared with the Limine menu, so one change retints
+# every screen in the boot chain rather than letting them drift apart.
+BONE = CONF["BONE"]       # everything the eye should read
+DIM = CONF["DIM"]         # ghost word only
+CHROME = CONF["CHROME"]   # bottom hint, secondary labels
+RUST = CONF["RUST"]       # the only chromatic note, and only on a rejected key
 
-KATA = "ｱｲｳｴｵｶｷｸｹｺｻｼｽｾｿﾀﾁﾂﾃﾄﾅﾆﾇﾈﾉﾊﾋﾌﾍﾎﾏﾐﾑﾒﾓﾔﾕﾖﾗﾘﾙﾚﾛﾜﾝ"
-COLUMN_CHARS = "ｼｽﾃﾑ"          # シ ス テ ム
+KATA = CONF["ALPHABET"]
+COLUMN_CHARS = CONF.column      # derived from GHOST_WORD unless set explicitly
 RATIO = 1.2308                  # glyph box / pointsize
 
-W, H = resolution()
+W, H = CONF.resolution
 RES = H / DESIGN_HEIGHT
 
-NAME = CONF.get("NAME") or account_name()
-GHOST_WORD = CONF.get("GHOST_WORD") or "システム"
+NAME = CONF["NAME"]
+GHOST_WORD = CONF["GHOST_WORD"]
 
-# Global size factor. 1.00 was the first native-resolution pass; the user asked
-# for 30% smaller, and it applies to the artwork AND to the layout ratios in
-# the script below, so the whole composition scales as one.
-SCALE = 0.70
+# Global size factor. It applies to the artwork AND to the layout ratios in
+# the script below, so the whole composition scales as one piece.
+SCALE = CONF.frac("SCALE")
 
 # Everything below is "pixels on a DESIGN_HEIGHT-tall screen" times RES.
 _S = SCALE * RES
@@ -154,7 +85,7 @@ AMBIENT_BOXES = tuple(round(b * _S) for b in (43, 56, 69))
 HIT_BOX = round(41 * _S)      # typed-character glitch glyph
 COLUMN_BOX = round(106 * _S)  # vertical column at the right
 GHOST_POINTSIZE = round(432 * _S)
-GHOST_MAX_WIDTH = 0.62        # fraction of the screen the ghost word may span
+GHOST_MAX_WIDTH = CONF.frac("GHOST_MAX_WIDTH")
 GHOST_SS = 3           # supersample factor for the ghost word only
 GHOST_BLUR = "0x0.7"   # was 0x1.4; the supersample no longer needs it to hide edges
 WELCOME_POINTSIZE = round(58 * _S)
@@ -223,16 +154,16 @@ def build_assets(d: Path):
            "-blur", GHOST_BLUR, d / "ghost.png")
 
     magick("-background", "none", "-fill", BONE, "-font", JB,
-           "-pointsize", WELCOME_POINTSIZE, f"label:Welcome, {NAME}",
+           "-pointsize", WELCOME_POINTSIZE, f"label:{CONF['WELCOME'].format(name=NAME)}",
            d / "welcome.png")
 
     magick("-background", "none", "-fill", CHROME, "-font", JB,
            "-kerning", HINT_KERNING, "-pointsize", HINT_POINTSIZE,
-           "label:TYPE A PASSWORD  ·  ENTER TO UNLOCK", d / "hint.png")
+           f"label:{CONF['HINT']}", d / "hint.png")
 
     # Shutdown screen: farewell line plus a small status label.
     magick("-background", "none", "-fill", BONE, "-font", JB,
-           "-pointsize", WELCOME_POINTSIZE, f"label:Goodbye, {NAME}",
+           "-pointsize", WELCOME_POINTSIZE, f"label:{CONF['GOODBYE'].format(name=NAME)}",
            d / "goodbye.png")
 
     magick("-background", "none", "-fill", CHROME, "-font", JB,
@@ -295,8 +226,30 @@ def build_script(d: Path):
                        ("ATT_DY", 0.030)):
         body = body.replace(f"@{name}@", f"{base * SCALE:.5f}")
     body = body.replace("@LINE_H@", str(max(2, round(3 * SCALE))))
+
+    # FIELD=off empties both loops rather than hiding their sprites: the
+    # glyphs are never created, so nothing is drawn and nothing is loaded.
+    on = CONF.flag("FIELD")
+    body = body.replace("@LOOSE@", str(CONF.count("GLYPHS") if on else 0))
+    body = body.replace("@STACKS@", str(CONF.count("STACKS") if on else 0))
+    body = body.replace("@STACK_MIN@", str(CONF.count("STACK_MIN")))
+    # Math.Random() is [0,1), so the span has to be one past the difference
+    # for STACK_MAX itself to be reachable.
+    # The vertical column belongs to the ambient field, so FIELD=off drops it
+    # too -- verified with plyrun, which caught it still rendering.
+    body = body.replace("@COLUMN@", str(len(COLUMN_CHARS) if on else 0))
+    body = body.replace("@STACK_SPAN@",
+                        str(CONF.count("STACK_MAX") - CONF.count("STACK_MIN") + 1))
+    # Plymouth cannot read a colour from anywhere but a literal, and this is
+    # the one place a colour is not baked into a PNG.
+    r, g, b = (int(BONE[i:i + 2], 16) / 255 for i in (1, 3, 5))
+    body = body.replace("@BONE_R@", f"{r:.3f}").replace("@BONE_G@", f"{g:.3f}")
+    body = body.replace("@BONE_B@", f"{b:.3f}")
     body = body.replace("@MAX_ATT@", str(MAX_ATTEMPT_LABEL))
     (d / "omarchy.script").write_text(body)
+    # A prebuilt package carries one resolution's artwork, and on another panel
+    # it looks wrong. Recording it lets the installer notice and regenerate.
+    (d / "built-for").write_text(f"{W}x{H}\n")
 
 
 SCRIPT = r'''# Omarchy Minimal — NieR-inspired LUKS unlock screen.
@@ -335,8 +288,8 @@ if (global.mode == "shutdown") global.shutdown = 1;
 if (global.mode == "reboot") global.shutdown = 1;
 
 global.glyph_count = @GLYPH_COUNT@;
-global.loose_count = 20;
-global.stack_count = 6;
+global.loose_count = @LOOSE@;
+global.stack_count = @STACKS@;
 global.max_bullets = 21;
 
 global.fps = 50.0;
@@ -468,7 +421,7 @@ for (s = 0; s < global.stack_count; s++) {
   if (bucket == 1) box = @BOX1@;
   if (bucket == 2) box = @BOX2@;
 
-  len = Math.Int(2 + Math.Random() * 5);
+  len = Math.Int(@STACK_MIN@ + Math.Random() * @STACK_SPAN@);
   step = Math.Int(box * 0.92);
 
   if (Math.Random() < 0.5) {
@@ -496,7 +449,7 @@ ghost.sprite.SetOpacity(0);
 
 #----------------------------------------- Katakana column ---------------------
 
-global.column_count = 4;
+global.column_count = @COLUMN@;
 global.col_box = column.image[0].GetHeight();
 column.step = Math.Int(global.col_box * 0.82);
 column.top = global.cy - (global.column_count - 1) * column.step / 2;
@@ -1168,7 +1121,7 @@ fun progress_callback(duration, value) {
 Plymouth.SetBootProgressFunction(progress_callback);
 
 fun display_message_callback(text) {
-  message = Image.Text(text, 0.812, 0.788, 0.690);
+  message = Image.Text(text, @BONE_R@, @BONE_G@, @BONE_B@);
   message_sprite.SetImage(message);
   message_sprite.SetOpacity(1);
 }

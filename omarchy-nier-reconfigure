@@ -1,0 +1,127 @@
+#!/usr/bin/env bash
+# Regenerate the NieR boot theme from /etc/omarchy-plymouth-nier.conf.
+#
+# Everything the config controls is baked into pre-rendered images, because
+# Plymouth's only scaler is nearest-neighbour and destroys antialiased
+# artwork. So changing a colour means re-rasterising the theme, which is what
+# this does.
+#
+# Regeneration happens in a temporary directory and is only swapped into place
+# once every step has succeeded: a config that fails to build leaves the
+# working theme exactly as it was.
+set -euo pipefail
+
+CONF=/etc/omarchy-plymouth-nier.conf
+SHARE=/usr/share/omarchy-plymouth-nier
+THEME_DIR=/usr/share/plymouth/themes/omarchy-minimal
+DRY=0
+
+for arg in "$@"; do
+    case "$arg" in
+    --dry-run) DRY=1 ;;
+    -h | --help)
+        cat <<'USAGE'
+usage: omarchy-nier-reconfigure [--dry-run]
+
+Reads /etc/omarchy-plymouth-nier.conf, regenerates the Plymouth theme and the
+Limine wallpaper, re-themes the boot menu and rebuilds the boot image.
+
+  --dry-run   validate the config and report what would change, touching
+              nothing. Safe to run as a normal user.
+USAGE
+        exit 0
+        ;;
+    *) echo "unknown option: $arg (try --help)" >&2; exit 2 ;;
+    esac
+done
+
+[ "$DRY" -eq 1 ] || [ "$(id -u)" -eq 0 ] || {
+    echo "run as root: sudo $0" >&2
+    exit 1
+}
+
+[ -r "$CONF" ] || { echo "missing $CONF" >&2; exit 1; }
+
+# ImageMagick and the fonts are optdepends, not depends: 150 MB of runtime
+# dependencies for a boot theme would be rude when most people never
+# reconfigure. Name exactly what is missing rather than failing obscurely
+# somewhere inside the generator.
+missing=()
+command -v magick >/dev/null || missing+=("imagemagick")
+command -v fc-match >/dev/null || missing+=("fontconfig")
+fc-match "Noto Sans CJK JP" 2>/dev/null | grep -qi 'noto sans cjk' || missing+=("noto-fonts-cjk")
+fc-match "JetBrainsMono Nerd Font" 2>/dev/null | grep -qi 'jetbrainsmono' || missing+=("ttf-jetbrains-mono-nerd")
+if [ ${#missing[@]} -gt 0 ]; then
+    echo "cannot regenerate: missing ${missing[*]}" >&2
+    echo "install them with:  sudo pacman -S --needed ${missing[*]}" >&2
+    exit 1
+fi
+
+tmp=$(mktemp -d)
+trap 'rm -rf "$tmp"' EXIT
+
+echo ":: reading $CONF"
+python3 "$SHARE/build-theme.py" "$tmp/theme"
+python3 "$SHARE/build-limine.py" "$tmp/limine"
+
+if [ "$DRY" -eq 1 ]; then
+    echo ":: dry run, nothing was changed"
+    # diff exits non-zero whenever it finds a difference, which is exactly the
+    # interesting case, so every comparison here has to tolerate that under
+    # `set -e` and `pipefail`.
+    if [ -d "$THEME_DIR" ]; then
+        # built-for lives beside the generators, not in the theme directory,
+        # so comparing it would report a phantom difference every time.
+        total=$(find "$tmp/theme" -maxdepth 1 -type f ! -name built-for | wc -l)
+        changed=$(diff -rq --exclude=built-for "$THEME_DIR" "$tmp/theme" 2>/dev/null | wc -l || true)
+        echo ":: $changed of $total theme files would change"
+    fi
+    if diff -q "$SHARE/limine/bg.png" "$tmp/limine/bg.png" >/dev/null 2>&1; then
+        echo ":: the boot menu wallpaper is unchanged"
+    else
+        echo ":: the boot menu wallpaper would change"
+    fi
+    block_diff=$(diff -u "$SHARE/limine/limine-block.conf" \
+        "$tmp/limine/limine-block.conf" 2>/dev/null | grep -E '^[+-][^+-]' || true)
+    if [ -n "$block_diff" ]; then
+        echo ":: the boot menu config would change:"
+        printf '%s\n' "$block_diff" | sed 's/^/     /'
+    else
+        echo ":: the boot menu config is unchanged"
+    fi
+    exit 0
+fi
+
+echo ":: installing"
+install -dm755 "$THEME_DIR" "$SHARE/limine"
+# Replace rather than merge: an alphabet with fewer letters generates fewer
+# glyph files, and leaving the old ones behind would waste space in the boot
+# image and confuse anyone reading the directory.
+find "$THEME_DIR" -maxdepth 1 -type f -delete
+# built-for records the panel this artwork was rasterised for. It belongs
+# beside the generators, not in the directory Plymouth loads, and it has to be
+# refreshed here or the installer's "was this built for another screen?" check
+# would go stale the moment anyone reconfigures.
+install -m644 "$tmp/theme/built-for" "$SHARE/built-for"
+rm "$tmp/theme/built-for"
+install -m644 -t "$THEME_DIR" "$tmp/theme/"*
+install -m644 -t "$SHARE/limine" "$tmp/limine/"*
+
+# shellcheck source=/dev/null
+. "$SHARE/limine-splice.sh"
+_apply_limine
+
+plymouth-set-default-theme omarchy-minimal
+
+echo ":: rebuilding the boot image"
+if [ -x /usr/bin/limine-mkinitcpio ]; then
+    /usr/bin/limine-mkinitcpio
+elif ls /etc/mkinitcpio.d/*.preset >/dev/null 2>&1; then
+    /usr/bin/mkinitcpio -P
+else
+    echo ":: WARNING: could not work out how to rebuild the boot image." >&2
+    echo "::          The passphrase prompt keeps the old theme until you do." >&2
+fi
+
+echo ":: done. The boot menu is already themed; the passphrase and shutdown"
+echo "::       screens appear on the next boot."

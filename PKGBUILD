@@ -6,18 +6,31 @@
 # repository to a handful of files and makes the geometry reproducible.
 
 pkgname=omarchy-plymouth-nier
-pkgver=1.2.0
+pkgver=1.3.0
 pkgrel=1
 pkgdesc="NieR-inspired theme for the Omarchy boot chain: Limine menu, LUKS unlock and shutdown screens"
 arch=('any')
 url="https://github.com/Willi005/omarchy-plymouth-nier"
 license=('MIT')
 depends=('plymouth')
+optdepends=('imagemagick: required by omarchy-nier-reconfigure'
+            'fontconfig: required by omarchy-nier-reconfigure'
+            'noto-fonts-cjk: the katakana and the background word'
+            'ttf-jetbrains-mono-nerd: every line of Latin text in the theme')
+backup=('etc/omarchy-plymouth-nier.conf')
 makedepends=('python' 'imagemagick' 'fontconfig' 'noto-fonts-cjk'
              'ttf-jetbrains-mono-nerd')
 install="$pkgname.install"
-source=('build-theme.py' 'build-limine.py' 'theme.conf' 'LICENSE')
-sha256sums=('SKIP' 'SKIP' 'SKIP' 'SKIP')
+source=('build-theme.py' 'build-limine.py' 'nierconf.py' 'theme.conf'
+        'limine-splice.sh' 'omarchy-nier-reconfigure' 'LICENSE')
+sha256sums=('SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP')
+
+# Where the source files land under $srcdir. Empty here, because makepkg copies
+# local sources straight in; the AUR flavour downloads a release tarball, so
+# everything is one directory deeper. Keeping that difference in one literal
+# makes aur/sync.sh a three-line rewrite rather than a fork that can drift.
+# It has to be a literal, not "$srcdir": that is not set when this is parsed.
+_srcsub=
 
 _theme=omarchy-minimal
 
@@ -28,19 +41,34 @@ build() {
     # screen size, the name on the greeting and the background word come from
     # theme.conf, and each can be overridden from the environment, e.g.
     #     PLYMOUTH_NAME="Ada" makepkg -sif
-    python3 "$srcdir/build-theme.py" "$srcdir/theme"
+    python3 "$srcdir$_srcsub/build-theme.py" "$srcdir/theme"
 
     # The Limine menu is a 1-bit character grid, so its only artwork is the
     # wallpaper behind the text. Geometry is a fraction of the shorter side,
     # and the font scale targets ~115 columns, so both follow the panel.
-    python3 "$srcdir/build-limine.py" "$srcdir/limine"
+    python3 "$srcdir$_srcsub/build-limine.py" "$srcdir/limine"
 }
 
 package() {
     install -dm755 "$pkgdir/usr/share/plymouth/themes/$_theme"
+    # built-for records the panel the artwork was rasterised for; it belongs
+    # next to the generators, not in the theme Plymouth loads.
+    install -Dm644 "$srcdir/theme/built-for" "$pkgdir/usr/share/$pkgname/built-for"
+    rm "$srcdir/theme/built-for"
     install -m644 -t "$pkgdir/usr/share/plymouth/themes/$_theme" "$srcdir/theme/"*
     install -dm755 "$pkgdir/usr/share/$pkgname/limine"
     install -m644 -t "$pkgdir/usr/share/$pkgname/limine" "$srcdir/limine/"*
 
-    install -Dm644 "$srcdir/LICENSE" "$pkgdir/usr/share/licenses/$pkgname/LICENSE"
+    # The generators ship too, because omarchy-nier-reconfigure re-runs them
+    # whenever /etc/omarchy-plymouth-nier.conf changes.
+    install -dm755 "$pkgdir/usr/share/$pkgname"
+    install -m644 -t "$pkgdir/usr/share/$pkgname" \
+        "$srcdir$_srcsub/build-theme.py" "$srcdir$_srcsub/build-limine.py" "$srcdir$_srcsub/nierconf.py" \
+        "$srcdir$_srcsub/limine-splice.sh"
+    install -Dm755 "$srcdir$_srcsub/omarchy-nier-reconfigure" \
+        "$pkgdir/usr/bin/omarchy-nier-reconfigure"
+    install -Dm644 "$srcdir$_srcsub/theme.conf" \
+        "$pkgdir/etc/omarchy-plymouth-nier.conf"
+
+    install -Dm644 "$srcdir$_srcsub/LICENSE" "$pkgdir/usr/share/licenses/$pkgname/LICENSE"
 }

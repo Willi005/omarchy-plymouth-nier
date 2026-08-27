@@ -26,11 +26,18 @@ On Arch / Omarchy:
 ```bash
 git clone https://github.com/Willi005/omarchy-plymouth-nier
 cd omarchy-plymouth-nier
-$EDITOR theme.conf        # at minimum, put your own name in it
 makepkg -si
 ```
 
-That generates the 206 assets, installs them to
+Nothing to edit first — configuration lives in `/etc/omarchy-plymouth-nier.conf`
+and is changed afterwards, see [Configuring it](#configuring-it).
+
+**Not on the AUR yet.** Arch disabled new AUR registrations in June 2026 after a
+malware campaign hit ~1,500 packages, and paused all AUR pushes on 1 August
+after a third wave. The `aur/` directory here holds a ready-to-push PKGBUILD and
+`.SRCINFO`; publishing is one command away from the day the service reopens.
+
+That generates the assets, installs them to
 `/usr/share/plymouth/themes/omarchy-minimal`, forces `DeviceScale=1`, sets the
 default theme and rebuilds the boot image. It then themes the Limine menu:
 the wallpaper is copied onto the ESP and a delimited block is spliced into the
@@ -65,21 +72,86 @@ modified. The `.bak` holds the whole file as it was at first install, so if
 boot entries have changed since, copy only its header — everything above the
 first line starting with `/`. The package's own revert does exactly that.
 
-## Making it yours
+## Configuring it
 
-Edit `theme.conf` and rebuild. Every key also works as an environment
-variable, which wins over the file:
-
-| key | default | what it does |
-|---|---|---|
-| `NAME` | the account's real name, else its login name | `Welcome, <NAME>` and `Goodbye, <NAME>` |
-| `RESOLUTION` | `auto` | panel size the assets are rendered for |
-| `GHOST_WORD` | `システム` | the large word breathing behind everything |
-| `BRANDING` | `OMARCHY` | the line at the top of the Limine boot menu |
+Everything lives in one file, `/etc/omarchy-plymouth-nier.conf`, which pacman
+preserves across upgrades (you get a `.pacnew` when the defaults change).
 
 ```bash
-PLYMOUTH_NAME="Ada" makepkg -sif
+sudo $EDITOR /etc/omarchy-plymouth-nier.conf
+sudo omarchy-nier-reconfigure --dry-run    # what would change
+sudo omarchy-nier-reconfigure              # do it
 ```
+
+Nothing takes effect on its own: every value is baked into pre-rendered images,
+because Plymouth's only scaler is nearest-neighbour. Changing a colour means
+re-rasterising the theme, which is what that command does. It regenerates into a
+temporary directory and swaps the result in only once every step has succeeded,
+so a config that fails to build leaves the working theme untouched.
+
+**Palette** — shared by all three screens, so one change retints the boot menu
+and the Plymouth screens together.
+
+| key | default | what it is |
+|---|---|---|
+| `BONE` | `#CFC9B0` | everything the eye is meant to read |
+| `DIM` | `#4A4638` | the ghost word, and nothing else |
+| `CHROME` | `#55503F` | secondary text: the hint, the menu's help rows |
+| `RUST` | `#B0563F` | the only chromatic note, and only on a rejected key |
+| `GROUND` | `#050505` | the near-black behind everything |
+
+**The ambient field**
+
+| key | default | what it is |
+|---|---|---|
+| `GLYPHS` | `20` | loose katakana scattered across the screen |
+| `STACKS` | `6` | short vertical piles, kept to the outer thirds |
+| `STACK_MIN` / `STACK_MAX` | `2` / `6` | how tall a pile gets, picked at random |
+| `ALPHABET` | 45 katakana | the pool the field draws from |
+| `COLUMN` | empty | the vertical column; empty derives it from `GHOST_WORD` |
+| `GHOST_WORD` | `システム` | the large word breathing behind everything |
+| `GHOST_MAX_WIDTH` | `0.62` | ceiling on its width, as a fraction of the screen |
+| `FIELD` | `on` | `off` removes glyphs, stacks **and** the column |
+
+**Composition and text**
+
+| key | default | what it is |
+|---|---|---|
+| `SCALE` | `0.70` | global size factor; artwork and layout scale as one |
+| `NAME` | account's real name | who gets greeted |
+| `WELCOME` / `GOODBYE` | `Welcome, {name}` | templates carrying `{name}` |
+| `HINT` | `TYPE A PASSWORD · …` | the bottom line, hidden once you type |
+| `RESOLUTION` | `auto` | the panel the artwork is rasterised for |
+
+**The Limine boot menu**
+
+| key | default | what it is |
+|---|---|---|
+| `BRANDING` | `OMARCHY` | the line centred at the top of the menu |
+| `BRACKET_INSET` / `BRACKET_ARM` | `0.030` / `0.065` | corner brackets, as fractions of the shorter side |
+| `MENU_HELP` | `on` | Limine's two help rows |
+
+Every key also works as an environment variable prefixed `NIER_`, which wins
+over the file — handy for trying something without editing anything:
+
+```bash
+NIER_FIELD=off NIER_SCALE=1.0 sudo omarchy-nier-reconfigure --dry-run
+```
+
+Validation fails loudly and names the offending key rather than rendering with a
+silently substituted value:
+
+```
+config error: BONE='CFC9B0' is not #RRGGBB or #RGB
+config error: STACK_MIN (8) is greater than STACK_MAX (4)
+```
+
+An unknown key only warns, so a config from a newer version does not break an
+older install.
+
+**One known cost:** after reconfiguring, `pacman -Qkk` reports the theme files
+as altered. They are generated files owned by the package; this is inherent, not
+a bug.
 
 `auto` reads the preferred mode of the largest connected display from
 `/sys/class/drm`, which works with no session running. The artwork has to be
@@ -203,7 +275,11 @@ working keyboard.
 ```
 build-theme.py                  generates every Plymouth asset, the script and the metadata
 build-limine.py                 generates the Limine wallpaper and config block
-theme.conf                      name, target resolution, background word, menu branding
+nierconf.py                     one config loader for both, with validation
+theme.conf                      installed as /etc/omarchy-plymouth-nier.conf
+omarchy-nier-reconfigure        regenerates everything after a config change
+limine-splice.sh                the limine.conf splice, shared by all three installers
+aur/                            AUR-flavoured PKGBUILD and .SRCINFO, plus sync.sh
 CLAUDE.md                       working notes: the traps, and how to verify a change
 docs/                           design specs
 PKGBUILD                        Arch package; builds assets at package time
