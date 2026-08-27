@@ -30,8 +30,15 @@ BRACKET_ALPHA = 0.30          # matches the login HUD's 0.28, plus a hair
 INSET = 0.030
 ARM = 0.065
 THICK = 0.0028
-MARGIN = 0.036                # term_margin, against height
-COLUMNS_TARGET = 960          # term_font_scale = round(W / this); ~115 columns
+
+# NOTHING about the text layer is derived from the panel size, deliberately.
+# /sys/class/drm reports the PANEL's mode, but the menu runs at whatever GOP
+# mode Limine picks when interface_resolution is unset -- which is not
+# necessarily the same, and cannot be observed from a booted system. Deriving
+# term_font_scale from the panel produced text far too large on the real
+# firmware. The text layer therefore uses Limine's own defaults (scale 1x1,
+# margin 64), exactly as the stock Omarchy config does. Only the wallpaper is
+# rendered per-resolution, and it is stretched, so it adapts either way.
 
 
 def load_conf():
@@ -168,9 +175,10 @@ term_foreground_bright: FAFCFB
 term_palette: 050505;B0563F;55503F;8C8770;4A4638;55503F;55503F;CFC9B0
 term_palette_bright: 4A4638;B0563F;8C8770;CFC9B0;55503F;8C8770;8C8770;FAFCFB
 
-term_margin: {margin}
+### No term_font_scale and no term_margin on purpose: see build-limine.py.
+### The menu's own resolution is not the panel's and cannot be read from a
+### booted system, so the text layer keeps Limine's defaults.
 term_margin_gradient: 0
-term_font_scale: {scale}x{scale}
 ### <<< omarchy-nier <<<
 """
 
@@ -184,22 +192,13 @@ def main():
     width, height = resolution()
     branding = CONF.get("BRANDING") or "OMARCHY"
 
-    margin = round(height * MARGIN)
-    # An earlier round(H/900) returned 1x on 1080p and rendered the menu
-    # unreadably small; this targets ~115 columns instead. Limine rejects
-    # anything above 8.
-    scale = min(8, max(2, round(width / COLUMNS_TARGET)))
-
     inset, arm, thick = wallpaper(width, height, out / "bg.png")
     (out / "limine-block.conf").write_text(BLOCK.format(
-        width=width, height=height, branding=branding,
-        margin=margin, scale=scale))
+        width=width, height=height, branding=branding))
 
-    cols = (width - 2 * margin) // (8 * scale)
-    rows_ = (height - 2 * margin) // (16 * scale)
     size = (out / "bg.png").stat().st_size
-    print(f"{width}x{height}  bg.png {size} B  brackets inset={inset} arm={arm} "
-          f"thick={thick}  margin={margin}  scale={scale}x  grid {cols}x{rows_}")
+    print(f"{width}x{height}  bg.png {size} B  brackets inset={inset} "
+          f"arm={arm} thick={thick}  text layer: Limine defaults")
 
 
 if __name__ == "__main__":

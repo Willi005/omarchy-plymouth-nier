@@ -295,12 +295,27 @@ a pixel count:
 | bracket inset | `min(W,H) * 0.030` |
 | bracket arm | `min(W,H) * 0.065` |
 | bracket thickness | `max(2, min(W,H) * 0.0028)` |
-| `term_margin` | `round(H * 0.036)` |
-| `term_font_scale` | `min(8, max(2, round(W / 960)))` |
+| `term_margin` | not set — Limine's default (64) |
+| `term_font_scale` | not set — Limine's default (1x1) |
 
-The font scale replaced an earlier `round(H/900)`, which returned 1x on 1080p and
-rendered the menu unreadably small. The current formula targets ~115 columns and
-yields 81-115 from 1366x768 to 3840x2160.
+## Do not derive the text layer from the panel size
+
+`/sys/class/drm` reports the **panel's** mode. The menu runs at whatever GOP mode
+Limine picks when `interface_resolution` is unset, and the two need not match.
+Two attempts to compute `term_font_scale` from the detected resolution failed;
+the second produced text far too large on the real firmware while looking
+correct in a QEMU screenshot, because QEMU's resolution is given on the command
+line and the check was circular.
+
+The menu's own mode cannot be read back from a booted system — `simpledrm` does
+not log it and `/sys/class/graphics/fb0/virtual_size` has already been rewritten
+by i915. So the text layer sets neither key and keeps Limine's defaults, exactly
+as the stock Omarchy config did. Only the wallpaper is per-resolution, and it is
+`stretched`.
+
+This is the third hidden-scaling bug in this project, after `Image.Scale` and
+`DeviceScale`. The pattern: **the surface being drawn on was not the surface
+assumed.**
 
 ## Rollback
 

@@ -91,7 +91,7 @@
     <button data-b="1">bitmap 8×16</button><button data-b="0">suave</button>
   </div>
   <div class="ctl"><span>Escala</span>
-    <button data-s="0">auto</button><button data-s="2">2×</button><button data-s="3">3×</button>
+    <button data-s="1">1× real</button><button data-s="2">2×</button><button data-s="3">3×</button>
   </div>
   <div class="ctl"><span>Ayuda</span>
     <button data-h="1">visible</button><button data-h="0">oculta</button>
@@ -114,8 +114,14 @@
   misma rejilla con JetBrains sin cuantizar, para comparar lo que se pierde.</p>
   <p><span class="tag">Verificado</span> Esta pantalla ya no es una conjetura: arranca bajo QEMU
   con OVMF y se compara con la captura real. De ahí salieron la segunda fila de ayuda
-  (<code>S Firmware Setup</code>), el <code>comment:</code> dibujado al pie en vez de junto a la
-  entrada, y la fórmula de escala.</p>
+  (<code>S Firmware Setup</code>) y el <code>comment:</code> dibujado al pie en vez de junto a la
+  entrada.</p>
+  <p><span class="tag">Ojo</span> La <b>resolución del menú no es la del panel</b>: sin
+  <code>interface_resolution</code>, Limine elige un modo GOP por su cuenta, y no se puede leer
+  desde un sistema arrancado. Por eso el tema no pone <code>term_font_scale</code> ni
+  <code>term_margin</code> — usa los valores por defecto de Limine, que es lo que hace la config
+  stock. El selector de resolución de aquí abajo modela el <i>wallpaper</i>, que sí se genera por
+  resolución y va estirado; no predice a qué modo saldrá el menú.</p>
 </div>
 
 <script>
@@ -134,7 +140,7 @@
   const NAMES = { A:'variante a · escena continua', B:'variante b · terminal desnudo',
                   C:'variante c · sala vacía' };
 
-  const S = { variant:'B', seed:7, bitmap:true, scale:0, help:true, marginRatio:0.036,
+  const S = { variant:'B', seed:7, bitmap:true, scale:1, help:true, marginRatio:0.036,
               sel:1, snap:false, booted:false, count:5, VW:2880, VH:1800 };
 
   // todas las medidas se escriben para una pantalla de 1800 px de alto y se
@@ -148,9 +154,10 @@
     return ((t ^ t >>> 14) >>> 0) / 4294967296;
   };
 
-    // apunta a ~115 columnas. Un round(alto/900) anterior daba 1x en 1080p y el
-  // menu salia ilegible de pequeno; verificado en QEMU a 1080p y a 2880x1800.
-  const fontScale = () => S.scale || Math.min(8, Math.max(2, Math.round(S.VW / 960)));
+    // 1x es lo real: el tema NO pone term_font_scale, asi que aplica el valor por
+  // defecto de Limine. Derivarlo de la resolucion del panel fue un error -- el
+  // menu corre en el modo GOP que elige Limine, que no es el del panel.
+  const fontScale = () => S.scale || 1;
 
   /* ---------------------------------------------------------------- menu */
   function lines() {

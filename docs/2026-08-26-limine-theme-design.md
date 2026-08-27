@@ -76,11 +76,18 @@ so the proportion holds from 1366x768 to 3840x2160:
 | bracket arm | `min(W,H) * 0.065` |
 | bracket thickness | `max(2, min(W,H) * 0.0028)` |
 | bracket colour | bone `#CFC9B0` at 30% over ground `#050505` |
-| `term_margin` | `round(H * 0.036)` |
-| `term_font_scale` | `min(8, max(2, round(W / 960)))` — targets ~115 columns |
+| `term_margin` | not set — Limine's default (64) |
+| `term_font_scale` | not set — Limine's default (1x1) |
 
-The font scale formula replaces an earlier `round(H/900)`, which returned 1x on
-1080p and rendered the menu unreadably small. Verified in QEMU at both sizes.
+**Nothing about the text layer is derived from the panel size.** Two attempts to
+compute `term_font_scale` from the detected resolution both failed, the second
+one surviving all the way to a real boot: `/sys/class/drm` reports the *panel's*
+mode, but the menu runs at whatever GOP mode Limine picks when
+`interface_resolution` is unset, and the two need not match. On this machine the
+result was text far too large. The menu's own mode cannot be read back from a
+booted system, so the text layer keeps Limine's defaults, exactly as the stock
+Omarchy config does. Only the wallpaper is rendered per-resolution, and it is
+`stretched`, so it adapts to whatever mode is chosen.
 
 ## Configuration
 
@@ -147,9 +154,16 @@ Confirmed at 1920x1080 and 2880x1800: PNG wallpaper loads, `TT=FF` transparency
 works, palette lands, brackets sit correctly, tree and reverse-video selection
 render as modelled, both help rows and the comment footer appear.
 
-What QEMU cannot answer: how the real panel scales a non-native
-`interface_resolution`. That idea is shelved — it only mattered as a route to
-softer text, which variant B makes moot.
+**What QEMU cannot answer, and this bit back once:** the resolution is handed to
+it on the command line (`xres=`/`yres=`), so any conclusion that depends on the
+screen mode is circular. It validates composition, palette, transparency,
+brackets and that the config parses. It says nothing about which GOP mode the
+real firmware picks — which is why the derived `term_font_scale` looked correct
+in a screenshot and was wrong on the machine.
+
+It also cannot say how a real panel scales a non-native `interface_resolution`.
+That idea is shelved — it only mattered as a route to softer text, which
+variant B makes moot.
 
 ## Out of scope
 
