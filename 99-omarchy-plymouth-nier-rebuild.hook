@@ -1,0 +1,16 @@
+# Second half of the repair above. 99 so this lands after every hook that
+# might rebuild the boot image on its own: if one of them already did, this
+# does nothing, and a transaction that only touched omarchy-settings gets the
+# rebuild it would otherwise never have.
+
+[Trigger]
+Operation = Install
+Operation = Upgrade
+Type = Package
+Target = omarchy-settings
+Target = plymouth
+
+[Action]
+Description = Rebuilding the boot image for the NieR Plymouth theme...
+When = PostTransaction
+Exec = /usr/share/libalpm/scripts/omarchy-nier-stake rebuild

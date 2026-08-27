@@ -37,8 +37,26 @@ rm -f "$DEST/built-for"
 
 echo ":: installing the generators and omarchy-nier-reconfigure"
 install -m644 -t "$SHARE" "$HERE/build-theme.py" "$HERE/build-limine.py" \
-    "$HERE/nierconf.py" "$HERE/limine-splice.sh"
+    "$HERE/nierconf.py" "$HERE/limine-splice.sh" "$HERE/plymouth-stake.sh"
 install -Dm755 "$HERE/omarchy-nier-reconfigure" /usr/bin/omarchy-nier-reconfigure
+
+# An `omarchy update` resets /etc/plymouth/plymouthd.conf to the stock theme,
+# so the theme re-stakes its claim from a pacman hook afterwards. This is a
+# manual install, but pacman still runs the hooks, so they belong here too.
+echo ":: installing the pacman hooks that survive an omarchy update"
+install -Dm755 "$HERE/omarchy-nier-stake" \
+    /usr/share/libalpm/scripts/omarchy-nier-stake
+install -Dm644 "$HERE/85-omarchy-plymouth-nier-claim.hook" \
+    /usr/share/libalpm/hooks/85-omarchy-plymouth-nier-claim.hook
+install -Dm644 "$HERE/99-omarchy-plymouth-nier-rebuild.hook" \
+    /usr/share/libalpm/hooks/99-omarchy-plymouth-nier-rebuild.hook
+
+# Sourced for _ensure_device_scale and _rebuild_boot_image, so a manual
+# install and a package install agree on both.
+_theme="$THEME"
+_conf="$PLYCONF"
+# shellcheck source=/dev/null
+. "$HERE/plymouth-stake.sh"
 
 # Never clobber a config the user has already edited.
 if [ -f "$CONF" ]; then
@@ -49,20 +67,13 @@ else
 fi
 
 echo ":: forcing DeviceScale=1"
-if [ ! -f "$PLYCONF" ]; then
-    printf '[Daemon]\nDeviceScale=1\n' > "$PLYCONF"
-elif grep -q '^[[:space:]]*DeviceScale[[:space:]]*=' "$PLYCONF"; then
-    sed -i 's/^[[:space:]]*DeviceScale[[:space:]]*=.*/DeviceScale=1/' "$PLYCONF"
-elif grep -q '^\[Daemon\]' "$PLYCONF"; then
-    sed -i '0,/^\[Daemon\]/s//[Daemon]\nDeviceScale=1/' "$PLYCONF"
-else
-    printf '[Daemon]\nDeviceScale=1\n' >> "$PLYCONF"
-fi
-
 plymouth-set-default-theme "$THEME"
+_ensure_device_scale
 
 echo ":: rebuilding the boot image"
-mkinitcpio -P
+# Not a bare `mkinitcpio -P`: on a Limine + UKI system there are no presets at
+# all and that call fails outright. _rebuild_boot_image picks the right one.
+_rebuild_boot_image
 
 echo
 echo "Done. Roll back with:"

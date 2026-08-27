@@ -1,0 +1,17 @@
+#!/bin/sh
+# Dispatcher for the two pacman hooks that keep this theme installed across an
+# `omarchy update`. All the logic is in plymouth-stake.sh, shared with the
+# package scriptlet, so a hook and an install cannot disagree about what the
+# Plymouth config should say.
+set -e
+
+_stake=/usr/share/omarchy-plymouth-nier/plymouth-stake.sh
+[ -r "$_stake" ] || exit 0
+# shellcheck source=/dev/null
+. "$_stake"
+
+case "$1" in
+    claim)   nier_stake_claim ;;
+    rebuild) nier_stake_rebuild ;;
+    *)       echo "usage: ${0##*/} claim|rebuild" >&2; exit 2 ;;
+esac

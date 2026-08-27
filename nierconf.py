@@ -155,7 +155,19 @@ class Conf(dict):
 
 def load():
     values = dict(DEFAULTS)
-    source = SYSTEM_CONF if SYSTEM_CONF.exists() else LOCAL_CONF
+
+    # NIER_CONF names the file outright. Without it the installed config wins
+    # whenever it exists, which is right for a reconfigure on a live machine
+    # and wrong for anything else: building a package for other people, or
+    # running a test that means to exercise the defaults, would silently
+    # inherit this machine's edits and produce a result nobody asked for.
+    override = os.environ.get("NIER_CONF")
+    if override:
+        source = Path(override)
+        if not source.exists():
+            _die(f"NIER_CONF={override!r} does not exist")
+    else:
+        source = SYSTEM_CONF if SYSTEM_CONF.exists() else LOCAL_CONF
     from_file = _read_file(source)
 
     for key, value in from_file.items():

@@ -111,17 +111,18 @@ install -m644 -t "$SHARE/limine" "$tmp/limine/"*
 . "$SHARE/limine-splice.sh"
 _apply_limine
 
+# Sourced for _ensure_device_scale and _rebuild_boot_image. Reconfiguring is
+# also the command a user reaches for when the screens have gone back to
+# stock, so it repairs the Plymouth config rather than assuming it is intact:
+# an `omarchy update` resets that file, DeviceScale=1 included.
+# shellcheck source=/dev/null
+. "$SHARE/plymouth-stake.sh"
+
 plymouth-set-default-theme omarchy-minimal
+_ensure_device_scale
 
 echo ":: rebuilding the boot image"
-if [ -x /usr/bin/limine-mkinitcpio ]; then
-    /usr/bin/limine-mkinitcpio
-elif ls /etc/mkinitcpio.d/*.preset >/dev/null 2>&1; then
-    /usr/bin/mkinitcpio -P
-else
-    echo ":: WARNING: could not work out how to rebuild the boot image." >&2
-    echo "::          The passphrase prompt keeps the old theme until you do." >&2
-fi
+_rebuild_boot_image
 
 echo ":: done. The boot menu is already themed; the passphrase and shutdown"
 echo "::       screens appear on the next boot."

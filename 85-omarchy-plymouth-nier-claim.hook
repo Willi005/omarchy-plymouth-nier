@@ -1,0 +1,19 @@
+# omarchy-settings resets /etc/plymouth/plymouthd.conf to the stock theme on
+# every upgrade -- deliberately, see plymouth-stake.sh -- which silently
+# reverts the LUKS prompt and the shutdown screen. Put the theme back.
+#
+# 85 so this lands before 90-mkinitcpio-install.hook: the repair has to be in
+# place before anything rebuilds the boot image, otherwise the stock theme is
+# what gets baked in and a second rebuild is needed to undo it.
+
+[Trigger]
+Operation = Install
+Operation = Upgrade
+Type = Package
+Target = omarchy-settings
+Target = plymouth
+
+[Action]
+Description = Restoring the NieR Plymouth theme...
+When = PostTransaction
+Exec = /usr/share/libalpm/scripts/omarchy-nier-stake claim

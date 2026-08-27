@@ -176,6 +176,16 @@ over the file — handy for trying something without editing anything:
 NIER_FIELD=off NIER_SCALE=1.0 sudo omarchy-nier-reconfigure --dry-run
 ```
 
+`NIER_CONF` is different: it is not a key but *which file to read*. Without it
+the installed `/etc/omarchy-plymouth-nier.conf` wins whenever it exists, which
+is right for reconfiguring a live machine and wrong for everything else —
+building a package for other people would silently inherit that machine's
+edits, greeting name included.
+
+```bash
+NIER_CONF=theme.conf makepkg -f
+```
+
 Validation fails loudly and names the offending key rather than rendering with a
 silently substituted value:
 
@@ -205,10 +215,11 @@ The composition as a whole is scaled by `SCALE` at the top of
 `build-theme.py`, which drives both the asset pointsizes and the layout
 ratios, so it shrinks or grows as one piece rather than drifting apart.
 
-## Four things that will bite you
+## Five things that will bite you
 
-These were each found by disassembling Plymouth, and each one silently
-produced a wrong screen before it was understood.
+The first four were each found by disassembling Plymouth, and each one
+silently produced a wrong screen before it was understood. The fifth is not
+Plymouth's doing at all.
 
 **1. `Image.Scale` is nearest-neighbour.** `ply_pixel_buffer_resize` contains
 exactly two `mulsd` — the x/y step ratios — and no per-pixel blending at all.
@@ -250,6 +261,31 @@ earlier attempts — counting frames, then reading `ply_progress_get_time` —
 both failed, because argon2 starves the frame timer and the pause freezes that
 clock. For reference this machine's header is argon2id with 9 iterations over
 1 GiB and takes **15.8 s** to reject a key.
+
+**5. `omarchy update` puts the stock theme back.** `omarchy-settings` ships an
+"etc-overrides" mechanism whose scriptlet runs an unconditional
+`cp -f .../plymouth-plymouthd.conf /etc/plymouth/plymouthd.conf` on every
+install and upgrade. That source file is two lines, `[Daemon]` and
+`Theme=omarchy`, so every Omarchy update hands the LUKS prompt and the
+shutdown screen back to stock *and* drops `DeviceScale=1`. Its own comment is
+explicit that this is deliberate: "these cp -f's are intentionally destructive
+on every install/upgrade [...] Users who customize [...]
+/etc/plymouth/plymouthd.conf (theme switch) WILL have their changes reset".
+
+The bootloader menu survives it, which is the tell — it is spliced into
+`limine.conf` on the ESP, a file the override never touches.
+
+So the package re-stakes its claim from two pacman hooks. `85-...-claim.hook`
+repairs the config, landing ahead of `90-mkinitcpio-install.hook` so the
+repair is in place before anything rebuilds the boot image; `99-...-rebuild.hook`
+rebuilds only if nothing else in the transaction already did, which it decides
+by comparing boot-image mtimes against a stamp in `/run`. Both trigger on
+`omarchy-settings` and `plymouth`.
+
+`omarchy-refresh-plymouth`, run by hand, is still outside that net — there is
+no transaction for a hook to attach to. Recover with
+`sudo omarchy-nier-reconfigure`, which repairs the Plymouth config too rather
+than assuming it is intact.
 
 ## The bootloader menu
 
@@ -317,6 +353,12 @@ nierconf.py                     one config loader for both, with validation
 theme.conf                      installed as /etc/omarchy-plymouth-nier.conf
 omarchy-nier-reconfigure        regenerates everything after a config change
 limine-splice.sh                the limine.conf splice, shared by all three installers
+plymouth-stake.sh               what plymouthd.conf must say, how to repair it and
+                                how to rebuild; shared by the hooks and all three
+                                installers
+omarchy-nier-stake              hook dispatcher, installed under libalpm/scripts
+85-...-claim.hook               repairs the config after an omarchy update
+99-...-rebuild.hook             rebuilds the boot image if nothing else did
 aur/                            AUR-flavoured PKGBUILD and .SRCINFO, plus sync.sh
 CLAUDE.md                       working notes: the traps, and how to verify a change
 docs/                           design specs
@@ -325,7 +367,8 @@ omarchy-plymouth-nier.install   pacman scriptlet: DeviceScale, set-default-theme
                                 mkinitcpio, and the limine.conf splice
 install.sh                      same thing without pacman; sources the scriptlet
                                 so the two paths cannot drift apart
-tools/                          plyparse, plyrun, assertions, HTML previews
+tools/                          plyparse, plyrun, assertions, HTML previews,
+                                test-stake.sh (25 unprivileged cases)
 ```
 
 ## License

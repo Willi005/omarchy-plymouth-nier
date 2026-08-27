@@ -6,7 +6,7 @@
 # repository to a handful of files and makes the geometry reproducible.
 
 pkgname=omarchy-plymouth-nier
-pkgver=1.4.0
+pkgver=1.5.0
 pkgrel=1
 pkgdesc="NieR-inspired theme for the Omarchy boot chain: Limine menu, LUKS unlock and shutdown screens"
 arch=('any')
@@ -22,8 +22,13 @@ makedepends=('python' 'imagemagick' 'fontconfig' 'noto-fonts-cjk'
              'ttf-jetbrains-mono-nerd')
 install="$pkgname.install"
 source=('build-theme.py' 'build-limine.py' 'nierconf.py' 'theme.conf'
-        'limine-splice.sh' 'omarchy-nier-reconfigure' 'LICENSE')
-sha256sums=('SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP')
+        'limine-splice.sh' 'plymouth-stake.sh' 'omarchy-nier-reconfigure'
+        'omarchy-nier-stake'
+        '85-omarchy-plymouth-nier-claim.hook'
+        '99-omarchy-plymouth-nier-rebuild.hook'
+        'LICENSE')
+sha256sums=('SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP'
+            'SKIP' 'SKIP')
 
 # Where the source files land under $srcdir. Empty here, because makepkg copies
 # local sources straight in; the AUR flavour downloads a release tarball, so
@@ -64,11 +69,23 @@ package() {
     install -dm755 "$pkgdir/usr/share/$pkgname"
     install -m644 -t "$pkgdir/usr/share/$pkgname" \
         "$srcdir$_srcsub/build-theme.py" "$srcdir$_srcsub/build-limine.py" "$srcdir$_srcsub/nierconf.py" \
-        "$srcdir$_srcsub/limine-splice.sh"
+        "$srcdir$_srcsub/limine-splice.sh" "$srcdir$_srcsub/plymouth-stake.sh"
     install -Dm755 "$srcdir$_srcsub/omarchy-nier-reconfigure" \
         "$pkgdir/usr/bin/omarchy-nier-reconfigure"
     install -Dm644 "$srcdir$_srcsub/theme.conf" \
         "$pkgdir/etc/omarchy-plymouth-nier.conf"
+
+    # An `omarchy update` resets /etc/plymouth/plymouthd.conf back to the
+    # stock theme -- omarchy-settings does it deliberately on every upgrade --
+    # so the theme has to re-stake its claim from a pacman hook afterwards.
+    # 85 repairs the config ahead of 90-mkinitcpio-install.hook, 99 rebuilds
+    # the boot image only if nothing else in the transaction already did.
+    install -Dm755 "$srcdir$_srcsub/omarchy-nier-stake" \
+        "$pkgdir/usr/share/libalpm/scripts/omarchy-nier-stake"
+    install -Dm644 "$srcdir$_srcsub/85-omarchy-plymouth-nier-claim.hook" \
+        "$pkgdir/usr/share/libalpm/hooks/85-omarchy-plymouth-nier-claim.hook"
+    install -Dm644 "$srcdir$_srcsub/99-omarchy-plymouth-nier-rebuild.hook" \
+        "$pkgdir/usr/share/libalpm/hooks/99-omarchy-plymouth-nier-rebuild.hook"
 
     install -Dm644 "$srcdir$_srcsub/LICENSE" "$pkgdir/usr/share/licenses/$pkgname/LICENSE"
 }

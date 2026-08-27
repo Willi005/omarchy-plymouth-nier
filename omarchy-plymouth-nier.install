@@ -2,52 +2,25 @@ _theme=omarchy-minimal
 _stock=omarchy
 _conf=/etc/plymouth/plymouthd.conf
 
-# DeviceScale=1 is not cosmetic. Plymouth guesses a HiDPI device scale from
-# DPI = width*254/(10*(width_mm+1)) and picks 2 above 96 DPI. On a 2880x1800
-# 310x200mm panel that is 235 DPI, so it would halve the logical window to
-# 1440x900 and upscale every image 2x with the same nearest-neighbour sampler
-# used by Image.Scale -- the whole composition twice its intended size and
-# visibly destroyed. plymouthd reads no conf.d, and this file belongs to the
-# plymouth package, so it is edited in place here rather than shipped.
-_ensure_device_scale() {
-    if [ ! -f "$_conf" ]; then
-        printf '[Daemon]\nDeviceScale=1\n' > "$_conf"
-        return
-    fi
-    if grep -q '^[[:space:]]*DeviceScale[[:space:]]*=' "$_conf"; then
-        sed -i 's/^[[:space:]]*DeviceScale[[:space:]]*=.*/DeviceScale=1/' "$_conf"
-    elif grep -q '^\[Daemon\]' "$_conf"; then
-        sed -i '0,/^\[Daemon\]/s//[Daemon]\nDeviceScale=1/' "$_conf"
-    else
-        printf '[Daemon]\nDeviceScale=1\n' >> "$_conf"
-    fi
-}
+# What the Plymouth config has to say, how to repair it when something resets
+# it, and how to rebuild the boot image all live in one file, shared with the
+# pacman hooks that re-stake the theme after an `omarchy update`.
+_stake=/usr/share/omarchy-plymouth-nier/plymouth-stake.sh
+# shellcheck source=/dev/null
+[ -r "$_stake" ] && . "$_stake"
 
-# How the boot image is rebuilt depends on the bootloader setup, and getting
-# this wrong leaves the theme installed but never shown.
-#
-# On a Limine + Unified Kernel Image system there are no mkinitcpio presets at
-# all: /etc/mkinitcpio.d is empty and `mkinitcpio -P` fails outright with "No
-# presets found". Worse, the mkinitcpio on PATH there is an interactive
-# wrapper from limine-mkinitcpio-hook that prompts before doing anything --
-# never acceptable from a scriptlet -- and a scriptlet's PATH does not include
-# /usr/local/bin anyway, so it would silently hit the real binary and fail.
-_rebuild_boot_image() {
-    if [ -x /usr/bin/limine-mkinitcpio ]; then
-        echo ":: rebuilding the boot image (limine-mkinitcpio)..."
-        /usr/bin/limine-mkinitcpio
-    elif ls /etc/mkinitcpio.d/*.preset >/dev/null 2>&1; then
-        echo ":: rebuilding the boot image (mkinitcpio -P)..."
-        /usr/bin/mkinitcpio -P
-    else
-        cat <<'WARN'
-:: WARNING: could not work out how to rebuild the boot image.
-::          The theme is installed and set as the default, but the passphrase
-::          prompt will keep using the old one until the initramfs is
-::          regenerated. Run whatever your bootloader needs.
-WARN
-    fi
-}
+# post_remove runs after the package's files are gone, so the shared file is
+# not there to source and only the rebuild is still needed. Keep a minimal
+# stand-in for exactly that case; every other entry point uses the real one.
+if ! command -v _rebuild_boot_image >/dev/null 2>&1; then
+    _rebuild_boot_image() {
+        if [ -x /usr/bin/limine-mkinitcpio ]; then
+            /usr/bin/limine-mkinitcpio
+        elif ls /etc/mkinitcpio.d/*.preset >/dev/null 2>&1; then
+            /usr/bin/mkinitcpio -P
+        fi
+    }
+fi
 
 # ---------------------------------------------------------------------------
 # Limine boot menu

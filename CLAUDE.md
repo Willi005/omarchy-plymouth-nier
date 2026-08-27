@@ -468,3 +468,100 @@ glyphs (5 -> 5, 20 -> 20, 40 -> 40).
 local machine's config, not the defaults. A verification run was briefly
 misread because of this. Pass `NIER_*` explicitly when the defaults are what
 is under test.
+
+## Surviving `omarchy update` (1.5.0)
+
+Symptom: after an Omarchy update the LUKS prompt and the shutdown screen were
+back to stock, while the Limine menu still carried the theme.
+
+### Cause
+
+`omarchy-settings` has an "etc-overrides" scriptlet
+(`/var/lib/pacman/local/omarchy-settings-*/install`) that runs, on every
+`post_install` and `post_upgrade`:
+
+```sh
+cp -f /usr/share/omarchy/etc-overrides/plymouth-plymouthd.conf \
+      /etc/plymouth/plymouthd.conf
+```
+
+The source file is two lines: `[Daemon]` and `Theme=omarchy`. So each update
+reverts the theme *and* drops `DeviceScale=1`. Its own comment says this is on
+purpose — "intentionally destructive on every install/upgrade [...] WILL have
+their changes reset to Omarchy defaults" — so it is a constraint to design
+around, not a bug to report.
+
+The asymmetry was the diagnostic: the Limine menu is configured in
+`limine.conf` on the ESP, which the override never touches.
+
+Overwriting the file alone would not change any boot yet — the already-built
+UKI still contains the good `plymouthd.conf`. What baked it in was that the
+same transaction also upgraded the kernel and Limine, firing
+`90-mkinitcpio-install.hook` after the file was already broken. Hence the
+ordering requirement below.
+
+### Fix: two pacman hooks
+
+pacman runs `PostTransaction` hooks in filename order, and after every
+package's own scriptlet. That gives the two hook points needed:
+
+- `85-omarchy-plymouth-nier-claim.hook` — before `90-mkinitcpio-install.hook`.
+  Repairs `plymouthd.conf` and touches a stamp in `/run`.
+- `99-omarchy-plymouth-nier-rebuild.hook` — after everything. Rebuilds only if
+  no boot image (`*.efi` on the ESP, `initramfs-*.img`) is newer than the
+  stamp; if one is, `90-mkinitcpio-install.hook` already ran after the repair
+  and picked it up.
+
+The stamp lives in `/run` (tmpfs) so it can never survive a reboot and be
+mistaken for fresh. Both hooks trigger on `omarchy-settings` and `plymouth`.
+
+`plymouth-stake.sh` holds the logic and is shared by the hooks, the package
+scriptlet, `install.sh` and `omarchy-nier-reconfigure`, so the four cannot
+disagree about what the file should say. The scriptlet keeps a six-line
+stand-in for `_rebuild_boot_image` for `post_remove` only, where the shared
+file is already deleted and cannot be sourced.
+
+### Verified by actually breaking it
+
+`tools/test-stake.sh` covers the decisions unprivileged against a scratch tree
+(25 cases, including "the theme is not installed, do nothing" and "do not
+match `omarchy-minimal-x`"). Then the real thing:
+
+```
+$ sudo pacman -S omarchy-settings
+Applying Omarchy etc-overrides...                    <- breaks it
+(3/8) Restoring the NieR Plymouth theme...
+:: /etc/plymouth/plymouthd.conf was reset; restoring the omarchy-minimal theme
+(5/8) Rebuilding the boot image for the NieR Plymouth theme...
+```
+
+and the result read back **from inside the UKI**, not from the live system:
+`DeviceScale=1`, `Theme=omarchy-minimal`, 206 assets, `keep_x0` present.
+
+### Still uncovered
+
+`omarchy-refresh-plymouth` run by hand does `plymouth-set-default-theme
+omarchy` and rebuilds. No transaction, so no hook. `omarchy-nier-reconfigure`
+now repairs the Plymouth config rather than assuming it is intact, so that is
+the one-command recovery.
+
+### Two fixes that came along
+
+- `install.sh` called a bare `mkinitcpio -P`, which fails outright on a
+  Limine + UKI system (no presets). It now uses `_rebuild_boot_image`.
+- `omarchy-nier-reconfigure` set the theme but never restored `DeviceScale=1`.
+
+### `NIER_CONF`
+
+`nierconf.load()` preferred `/etc/omarchy-plymouth-nier.conf` whenever it
+existed, with no way to override the path. That is right for reconfiguring a
+live machine and wrong for a package build or a defaults test — round 16
+already lost time to a comparison where one run silently read `/etc`.
+`NIER_CONF=<path>` now names the file outright:
+
+```bash
+NIER_CONF=theme.conf makepkg -f     # what gets published
+```
+
+Two builds are therefore needed per release: one with the local config to
+install here, one with `NIER_CONF=theme.conf` to publish.
