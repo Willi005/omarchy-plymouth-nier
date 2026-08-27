@@ -407,5 +407,11 @@ canonical PKGBUILD -- the source array, the checksums, and `_src` -- and
 regenerates `.SRCINFO`, so the AUR flavour cannot drift from this one. Pushing
 is one command from the day it reopens.
 
+The pacman repository lives on a rolling `repo` release tag, separate from the
+version tags, so the `Server =` URL never changes. GitHub Releases cannot store
+symlinks, so `omarchy-nier.db` and `.files` are uploaded as real copies of their
+`.tar.gz` rather than the symlinks `repo-add` creates. Signing key fingerprint
+281082D757EF8AD66E7EB3BCA62334C0AAACC7D1.
+
 Deliberately not offered: a `curl … | bash` bootstrap. It saves two commands and
 it is precisely the supply-chain shape that froze the AUR.

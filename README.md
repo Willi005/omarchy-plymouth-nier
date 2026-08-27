@@ -32,6 +32,35 @@ makepkg -si
 Nothing to edit first — configuration lives in `/etc/omarchy-plymouth-nier.conf`
 and is changed afterwards, see [Configuring it](#configuring-it).
 
+### Or from the pacman repository
+
+Real `pacman -S`, and updates arrive with `-Syu`. Import the signing key, then
+add the repository:
+
+```bash
+curl -fsSL https://github.com/Willi005/omarchy-plymouth-nier/releases/download/repo/omarchy-nier-signing-key.asc \
+    | sudo pacman-key --add -
+sudo pacman-key --lsign-key 281082D757EF8AD66E7EB3BCA62334C0AAACC7D1
+```
+
+```ini
+# /etc/pacman.conf
+[omarchy-nier]
+SigLevel = Required DatabaseOptional
+Server = https://github.com/Willi005/omarchy-plymouth-nier/releases/download/repo
+```
+
+```bash
+sudo pacman -Sy omarchy-plymouth-nier
+```
+
+The prebuilt package carries artwork rasterised for one panel, and Plymouth's
+only scaler is nearest-neighbour, so on a different screen it would look wrong.
+The installer notices — the package records what it was built for — and
+regenerates on the spot when ImageMagick and the fonts are present, saying so
+clearly when they are not. That is why the source build above is the primary
+route.
+
 **Not on the AUR yet.** Arch disabled new AUR registrations in June 2026 after a
 malware campaign hit ~1,500 packages, and paused all AUR pushes on 1 August
 after a third wave. The `aur/` directory here holds a ready-to-push PKGBUILD and
