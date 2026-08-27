@@ -565,3 +565,55 @@ NIER_CONF=theme.conf makepkg -f     # what gets published
 
 Two builds are therefore needed per release: one with the local config to
 install here, one with `NIER_CONF=theme.conf` to publish.
+
+## A prebuilt package also carries one config (1.5.1)
+
+Direct consequence of `NIER_CONF` above. Before it, the published package was
+built from this machine's `/etc` config, so it shipped one user's glyph counts
+and greeting name to everyone — bad for them, but it meant upgrades happened
+to preserve this machine's look. Fixing the first defect exposed the second:
+the next `pacman -Syu` would have replaced a customised field with the stock
+one, silently, since pacman preserves `/etc/omarchy-plymouth-nier.conf` and it
+still reads exactly the way the user left it.
+
+`built-for` already recorded the panel so the scriptlet could notice a
+resolution mismatch and regenerate. It now records the config too:
+
+```
+2880x1800
+config=961176dabac2bc19
+```
+
+`nierconf.fingerprint()` is a digest of the resolved values, so a comment, a
+reordering or a `#abc` → `#aabbcc` rewrite does not read as a change.
+`_regenerated_if_needed` regenerates when either the panel or the fingerprint
+differs, and concludes nothing when it cannot read both — an older package
+with a one-line `built-for`, or a system without python3, is absence of
+evidence, not evidence of a mismatch.
+
+### The fingerprint cannot depend on who runs it
+
+`NAME` is the one value that is derived rather than read when the file leaves
+it blank, and `_account_name()` read `os.getuid()`. Every path that renders
+artwork runs privileged, so the fingerprint would have differed between build
+time and install time for an identical config, and regenerated forever.
+
+Two changes: `_account_name()` now prefers `PKEXEC_UID`/`SUDO_UID` over the
+effective uid — which also fixes a real defect, an empty `NAME` under sudo
+greeting "Welcome, Root" — and `fingerprint()` uses `_NAME_FROM_FILE`, what
+the file actually said, rather than what it resolved to.
+
+### Verified
+
+Building the package from the repo defaults (`GLYPHS=20`) and installing it
+over a machine configured with `GLYPHS=35`:
+
+```
+:: artwork was rendered from different settings than /etc/omarchy-plymouth-nier.conf
+:: reading /etc/omarchy-plymouth-nier.conf
+theme built in /tmp/...: 207 files
+```
+
+and afterwards `loose_count = 35` in the installed script, with `built-for`
+carrying the user's fingerprint. Same fingerprint under a different uid,
+different fingerprint for a different config, both checked directly.

@@ -6,14 +6,16 @@
 # repository to a handful of files and makes the geometry reproducible.
 
 pkgname=omarchy-plymouth-nier
-pkgver=1.5.0
+pkgver=1.5.1
 pkgrel=1
 pkgdesc="NieR-inspired theme for the Omarchy boot chain: Limine menu, LUKS unlock and shutdown screens"
 arch=('any')
 url="https://github.com/Willi005/omarchy-plymouth-nier"
 license=('MIT')
 depends=('plymouth')
-optdepends=('imagemagick: required by omarchy-nier-reconfigure'
+optdepends=('python: required by omarchy-nier-reconfigure, and lets an upgrade
+             notice that the packaged artwork was built from other settings'
+            'imagemagick: required by omarchy-nier-reconfigure'
             'fontconfig: required by omarchy-nier-reconfigure'
             'noto-fonts-cjk: the katakana and the background word'
             'ttf-jetbrains-mono-nerd: every line of Latin text in the theme')

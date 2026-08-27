@@ -252,9 +252,11 @@ def build_script(d: Path):
     body = body.replace("@BONE_B@", f"{b:.3f}")
     body = body.replace("@MAX_ATT@", str(MAX_ATTEMPT_LABEL))
     (d / "omarchy.script").write_text(body)
-    # A prebuilt package carries one resolution's artwork, and on another panel
-    # it looks wrong. Recording it lets the installer notice and regenerate.
-    (d / "built-for").write_text(f"{W}x{H}\n")
+    # A prebuilt package carries one machine's answers baked into PNGs: one
+    # resolution, and one set of config values. On another panel, or against a
+    # different config, it is wrong. Recording both lets the installer notice
+    # and regenerate rather than overwrite.
+    (d / "built-for").write_text(f"{W}x{H}\nconfig={nierconf.fingerprint(CONF)}\n")
 
 
 SCRIPT = r'''# Omarchy Minimal — NieR-inspired LUKS unlock screen.

@@ -52,14 +52,43 @@ _panel() {
          END { print mode }' /sys/class/drm/*/modes 2>/dev/null
 }
 
-_regenerated_for_this_display() {
-    [ -x /usr/bin/omarchy-nier-reconfigure ] || return 1
-    local built panel
-    built=$(cat /usr/share/omarchy-plymouth-nier/built-for 2>/dev/null || true)
-    panel=$(_panel)
-    [ -n "$panel" ] && [ "$built" = "$panel" ] && return 1
+# The other half of the same problem: a prebuilt package also has one config
+# baked into its PNGs. Without this, upgrading replaced a customised field with
+# whatever the builder's machine happened to say -- silently, since the user's
+# /etc config is preserved by pacman and still reads the way they left it.
+_built_field() { sed -n "$1" /usr/share/omarchy-plymouth-nier/built-for 2>/dev/null; }
 
-    echo ":: artwork was rendered for ${built:-an unknown screen}; this display is ${panel:-unknown}"
+_conf_fingerprint() {
+    python3 -c 'import sys
+sys.path.insert(0, "/usr/share/omarchy-plymouth-nier")
+import nierconf
+print(nierconf.fingerprint(nierconf.load()))' 2>/dev/null
+}
+
+_regenerated_if_needed() {
+    [ -x /usr/bin/omarchy-nier-reconfigure ] || return 1
+    local built panel baked live reason=""
+
+    built=$(_built_field 1p)
+    panel=$(_panel)
+    if [ -n "$panel" ] && [ -n "$built" ] && [ "$built" != "$panel" ]; then
+        reason="artwork was rendered for $built; this display is $panel"
+    fi
+
+    if [ -z "$reason" ]; then
+        baked=$(_built_field 's/^config=//p')
+        live=$(_conf_fingerprint)
+        # Both have to be readable to conclude anything. An old package with a
+        # one-line built-for, or a system without python3, means no evidence of
+        # a mismatch -- not evidence of one.
+        if [ -n "$baked" ] && [ -n "$live" ] && [ "$baked" != "$live" ]; then
+            reason="artwork was rendered from different settings than /etc/omarchy-plymouth-nier.conf"
+        fi
+    fi
+
+    [ -n "$reason" ] || return 1
+
+    echo ":: $reason"
     if /usr/bin/omarchy-nier-reconfigure; then
         return 0
     fi
@@ -74,7 +103,7 @@ WARN
 
 _activate() {
     _ensure_device_scale
-    _regenerated_for_this_display && return 0
+    _regenerated_if_needed && return 0
     plymouth-set-default-theme "$_theme"
     _rebuild_boot_image
     _apply_limine

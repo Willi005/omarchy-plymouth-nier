@@ -75,9 +75,22 @@ def _read_file(path):
 
 
 def _account_name():
-    """Real name if the account has one, otherwise the login name."""
+    """Real name if the account has one, otherwise the login name.
+
+    Prefers the invoking user over the effective one. Every path that renders
+    the artwork runs privileged -- the pacman scriptlet, omarchy-nier-reconfigure
+    -- so reading the effective uid would greet an empty NAME with "Welcome,
+    Root", which is nobody's configuration.
+    """
+    uid = os.getuid()
+    if uid == 0:
+        for var in ("PKEXEC_UID", "SUDO_UID"):
+            value = os.environ.get(var, "")
+            if value.isdigit():
+                uid = int(value)
+                break
     try:
-        entry = pwd.getpwuid(os.getuid())
+        entry = pwd.getpwuid(uid)
     except KeyError:
         return "there"
     gecos = (entry.pw_gecos or "").split(",")[0].strip()
@@ -219,7 +232,33 @@ def load():
         print("warning: neither WELCOME nor GOODBYE uses {name}; NAME will not "
               "appear on screen.", file=sys.stderr)
 
+    values["_NAME_FROM_FILE"] = values["NAME"]
     values["NAME"] = values["NAME"] or _account_name()
     conf = Conf(values)
     conf.source = source
     return conf
+
+
+def fingerprint(conf):
+    """A stable digest of the settings the artwork was actually rendered with.
+
+    A prebuilt package carries one machine's answers baked into PNGs, and the
+    installer already notices when the panel differs. It could not notice when
+    the *config* differed, so upgrading to a package built from the defaults
+    silently replaced a customised field with the stock one. Recording this
+    next to the resolution closes that: same version, different settings, and
+    the scriptlet regenerates instead of overwriting.
+
+    Derived from the resolved values rather than the file, so a comment, a
+    reordering or a #abc/#aabbcc rewrite does not read as a change.
+    """
+    import hashlib
+    keys = sorted(k for k in conf if k in DEFAULTS)
+    values = dict(conf)
+    # NAME is the one value that is derived rather than read when the file
+    # leaves it blank, and what it derives to depends on who is running. The
+    # fingerprint has to mean "these settings", not "these settings as seen by
+    # this user", so it uses what the file actually said.
+    values["NAME"] = conf.get("_NAME_FROM_FILE", conf["NAME"])
+    blob = "\n".join(f"{k}={values[k]}" for k in keys)
+    return hashlib.sha256(blob.encode("utf-8")).hexdigest()[:16]
