@@ -1,0 +1,25 @@
+# Asserts the ambient field never overlaps the login block.
+#
+# Appended after the theme script, which has already placed every glyph at load
+# time, so no frames need to run. Counter names are deliberately odd: a bare
+# assignment inside a theme function writes through to a global of the same
+# name, and a harness that reuses a name the theme touches gets clobbered
+# mid-loop.
+vq_hits = 0;
+for (vq = 0; vq < global.amb_count; vq++) {
+  vq_x = amb.x[vq];
+  vq_y = amb.y[vq];
+  vq_b = amb.box[vq];
+  if (vq_x + vq_b < global.keep_x0 || vq_x > global.keep_x1 ||
+      vq_y + vq_b < global.keep_y0 || vq_y > global.keep_y1) {
+    vq_hits = vq_hits;
+  } else {
+    vq_hits++;
+  }
+}
+global.keepout_hits = vq_hits;
+global.keep_w = Math.Int(global.keep_x1 - global.keep_x0);
+global.keep_h = Math.Int(global.keep_y1 - global.keep_y0);
+global.keep_frac = Math.Int(1000 * (global.keep_x1 - global.keep_x0)
+                            * (global.keep_y1 - global.keep_y0)
+                            / (global.W * global.H));

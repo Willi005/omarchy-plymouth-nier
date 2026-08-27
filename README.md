@@ -140,7 +140,16 @@ and the Plymouth screens together.
 | `COLUMN` | empty | the vertical column; empty derives it from `GHOST_WORD` |
 | `GHOST_WORD` | `システム` | the large word breathing behind everything |
 | `GHOST_MAX_WIDTH` | `0.62` | ceiling on its width, as a fraction of the screen |
+| `KEEPOUT` | `0.035` | extra margin the field keeps off the login block |
 | `FIELD` | `on` | `off` removes glyphs, stacks **and** the column |
+
+The field is scenery, so it is kept off the things you actually have to read.
+The greeting, the password rule and the `ACCESS DENIED` / `ATTEMPT NN` labels
+are **always** protected; `KEEPOUT` only widens the margin around them. Loose
+glyphs are placed by rejection sampling rather than being pushed to the nearest
+edge, which would pile them along the boundary and draw a visible outline
+around the very thing being protected. The vertical stacks respect the same box
+and their bands shrink as it grows.
 
 **Composition and text**
 

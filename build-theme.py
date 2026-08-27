@@ -238,6 +238,11 @@ def build_script(d: Path):
     # The vertical column belongs to the ambient field, so FIELD=off drops it
     # too -- verified with plyrun, which caught it still rendering.
     body = body.replace("@COLUMN@", str(len(COLUMN_CHARS) if on else 0))
+    body = body.replace("@KEEPOUT@", f"{CONF.frac('KEEPOUT'):.5f}")
+    # Bottom of the protected band: the rule, then ACCESS DENIED, then
+    # ATTEMPT NN, plus room for that last label's own height.
+    body = body.replace("@KEEP_BOTTOM@",
+                        f"{(0.045 + 0.062 + 0.030 + 0.022) * SCALE:.5f}")
     body = body.replace("@STACK_SPAN@",
                         str(CONF.count("STACK_MAX") - CONF.count("STACK_MIN") + 1))
     # Plymouth cannot read a colour from anywhere but a literal, and this is
@@ -279,6 +284,20 @@ global.W = Window.GetWidth();
 global.H = Window.GetHeight();
 global.cx = global.W / 2;
 global.cy = global.H * 0.47;
+
+# Keep-out box around the login block. The ambient field is scenery and must
+# never drift across the greeting, the password rule, or the ACCESS DENIED and
+# ATTEMPT labels -- those are the things you actually have to read, and a
+# katakana sitting on them reads as a rendering fault rather than as
+# atmosphere. The block itself is always protected; KEEPOUT only widens the
+# margin around it, as a fraction of the screen's shorter side.
+global.keep_pad = Math.Min(global.W, global.H) * @KEEPOUT@;
+global.keep_x0 = global.cx - global.W * @BR_W@ / 2 - global.keep_pad;
+global.keep_x1 = global.cx + global.W * @BR_W@ / 2 + global.keep_pad;
+global.keep_y0 = global.cy - global.H * @BR_H@ / 2 - global.keep_pad;
+# The brackets stop above the status labels, so the bottom edge is measured
+# from the rule down past ACCESS DENIED and ATTEMPT NN instead.
+global.keep_y1 = global.cy + global.H * @KEEP_BOTTOM@ + global.keep_pad;
 
 # Shutdown and reboot get a plain farewell screen instead of the katakana
 # field. Plymouth.GetMode() reports "shutdown"/"reboot" there.
@@ -372,6 +391,7 @@ global.slot = 0;
 # discarded on return — that is exactly what made the whole ambient field
 # invisible once glyph creation moved into a helper. Verified with plyrun.
 amb.bucket = [];
+amb.box = [];
 amb.index = [];
 amb.x = [];
 amb.y = [];
@@ -381,33 +401,57 @@ amb.swap = [];
 amb.sprite = [];
 
 fun add_glyph(bucket, x, y) {
-  i = global.slot;
-  amb.bucket[i] = bucket;
-  amb.index[i] = Math.Int(Math.Random() * global.glyph_count);
-  amb.phase[i] = Math.Random() * 2 * Math.Pi;
-  amb.speed[i] = 0.15 + Math.Random() * 0.30;
-  amb.swap[i] = Math.Int(70 + Math.Random() * 320);
+  # NOT `i`. A bare assignment inside a function writes through to a global of
+  # the same name, and the loose-glyph loop above iterates on `i`. It happened
+  # to work because global.slot advanced in step with it, but creating the
+  # stacks first would have silently broken the loop.
+  slot_i = global.slot;
+  amb.bucket[slot_i] = bucket;
+  amb.index[slot_i] = Math.Int(Math.Random() * global.glyph_count);
+  amb.phase[slot_i] = Math.Random() * 2 * Math.Pi;
+  amb.speed[slot_i] = 0.15 + Math.Random() * 0.30;
+  amb.swap[slot_i] = Math.Int(70 + Math.Random() * 320);
 
   # Bucket lookup is inlined rather than wrapped in a function returning an
   # image: a silent null would mean an invisible field.
-  if (bucket == 0) start_image = glyph.a0[amb.index[i]];
-  if (bucket == 1) start_image = glyph.a1[amb.index[i]];
-  if (bucket == 2) start_image = glyph.a2[amb.index[i]];
+  if (bucket == 0) { start_image = glyph.a0[amb.index[slot_i]]; amb.box[slot_i] = @BOX0@; }
+  if (bucket == 1) { start_image = glyph.a1[amb.index[slot_i]]; amb.box[slot_i] = @BOX1@; }
+  if (bucket == 2) { start_image = glyph.a2[amb.index[slot_i]]; amb.box[slot_i] = @BOX2@; }
 
-  amb.x[i] = Math.Int(x);
-  amb.y[i] = Math.Int(y);
-  amb.sprite[i] = Sprite(start_image);
-  amb.sprite[i].SetPosition(amb.x[i], amb.y[i], 10);
-  amb.sprite[i].SetOpacity(0);
+  amb.x[slot_i] = Math.Int(x);
+  amb.y[slot_i] = Math.Int(y);
+  amb.sprite[slot_i] = Sprite(start_image);
+  amb.sprite[slot_i].SetPosition(amb.x[slot_i], amb.y[slot_i], 10);
+  amb.sprite[slot_i].SetOpacity(0);
   global.slot++;
 }
 
-# Loose glyphs, scattered anywhere.
+# Loose glyphs, scattered anywhere outside the keep-out box. Rejection
+# sampling rather than pushing a bad position to the nearest edge, which would
+# pile glyphs along the boundary and draw a visible outline around the very
+# thing being protected. The retry count is bounded because this language has
+# no `while`: with the box at a few percent of the screen a rejection streak of
+# 24 is impossible in practice, and the fallback is one glyph in the margin
+# rather than a hang.
 if (global.shutdown == 0) {
   for (i = 0; i < global.loose_count; i++) {
-    add_glyph(Math.Int(Math.Random() * 3),
-              Math.Random() * (global.W - 70),
-              Math.Random() * (global.H - 70));
+    lb = Math.Int(Math.Random() * 3);
+    if (lb == 0) lbox = @BOX0@;
+    if (lb == 1) lbox = @BOX1@;
+    if (lb == 2) lbox = @BOX2@;
+
+    lx = Math.Random() * (global.W - lbox);
+    ly = Math.Random() * (global.H - lbox);
+    for (lt = 0; lt < 24; lt++) {
+      if (lx + lbox < global.keep_x0 || lx > global.keep_x1 ||
+          ly + lbox < global.keep_y0 || ly > global.keep_y1) {
+        lt = 999;
+      } else {
+        lx = Math.Random() * (global.W - lbox);
+        ly = Math.Random() * (global.H - lbox);
+      }
+    }
+    add_glyph(lb, lx, ly);
   }
 }
 
@@ -424,11 +468,16 @@ for (s = 0; s < global.stack_count; s++) {
   len = Math.Int(@STACK_MIN@ + Math.Random() * @STACK_SPAN@);
   step = Math.Int(box * 0.92);
 
+  # The outer bands were already clear of the login block, but they stop being
+  # clear once KEEPOUT widens the box, so they are clamped against it.
   if (Math.Random() < 0.5) {
-    sx = global.W * (0.03 + Math.Random() * 0.27);
+    band_lo = global.W * 0.03;
+    band_hi = Math.Max(band_lo, Math.Min(global.W * 0.30, global.keep_x0 - box));
   } else {
-    sx = global.W * (0.62 + Math.Random() * 0.33);
+    band_lo = Math.Max(global.W * 0.62, global.keep_x1);
+    band_hi = Math.Max(band_lo, global.W * 0.95 - box);
   }
+  sx = band_lo + Math.Random() * (band_hi - band_lo);
   sy = Math.Random() * (global.H - len * step - 20);
 
   for (n = 0; n < len; n++) {

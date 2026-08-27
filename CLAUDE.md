@@ -415,3 +415,56 @@ symlinks, so `omarchy-nier.db` and `.files` are uploaded as real copies of their
 
 Deliberately not offered: a `curl … | bash` bootstrap. It saves two commands and
 it is precisely the supply-chain shape that froze the AUR.
+
+
+## The ambient field is kept off the login block (1.4.0)
+
+Loose glyphs used to be placed anywhere -- `Math.Random() * (W - 70)` on both
+axes -- so they landed on the greeting, the password rule and the ACCESS DENIED
+and ATTEMPT labels. The stacks were already confined to outer bands; the loose
+glyphs were not.
+
+There is now a keep-out rectangle around the login block, computed from the
+same constants that place it, before anything is positioned. Loose glyphs are
+**rejection sampled** against it: pushing a bad position to the nearest edge
+would pile glyphs along the boundary and draw a visible outline around exactly
+the thing being protected. The retry loop is bounded at 24 because this
+language has no `while`, and the loop exits by setting the counter past its
+limit because `break` is not something to rely on here.
+
+`KEEPOUT` widens the margin; the block itself is always protected. The stack
+bands are clamped against the same box with `Math.Min`/`Math.Max` so they stay
+clear as it grows.
+
+### Math.Min/Max/Abs/Clamp exist, but not as native functions
+
+They are absent from `script.so`'s native function table, which briefly looked
+like `build-theme.py` had been calling a function that does not exist. They are
+defined in a **prelude written in the theme language itself** and embedded in
+`script.so` as source text:
+
+```
+Math.Min = fun (value_a, value_b)
+  if (value_a < value_b) return value_a;
+  return value_b;
+```
+
+`script_lib_math_setup` evaluates it, so they work in plyrun too. Verified by
+running them.
+
+### A scoping landmine that was live and silent
+
+`add_glyph` assigned a bare `i`, and the loose-glyph loop iterates on `i`. Per
+the scoping rule, that wrote through to the global. It happened to work only
+because `global.slot` advanced in step with the loop counter -- creating the
+stacks first would have broken it silently. The internal name is now `slot_i`,
+and the loop was measured afterwards to confirm it produces exactly `GLYPHS`
+glyphs (5 -> 5, 20 -> 20, 40 -> 40).
+
+### Testing "the defaults" on a machine that has the theme installed
+
+`nierconf` prefers `/etc/omarchy-plymouth-nier.conf` over the repo's
+`theme.conf`, so a test that passes no environment overrides is testing the
+local machine's config, not the defaults. A verification run was briefly
+misread because of this. Pass `NIER_*` explicitly when the defaults are what
+is under test.

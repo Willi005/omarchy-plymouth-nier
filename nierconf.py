@@ -32,7 +32,7 @@ DEFAULTS = {
     "GLYPHS": "20", "STACKS": "6", "STACK_MIN": "2", "STACK_MAX": "6",
     "ALPHABET": "ｱｲｳｴｵｶｷｸｹｺｻｼｽｾｿﾀﾁﾂﾃﾄﾅﾆﾇﾈﾉﾊﾋﾌﾍﾎﾏﾐﾑﾒﾓﾔﾕﾖﾗﾘﾙﾚﾛﾜﾝ",
     "COLUMN": "", "GHOST_WORD": "システム", "GHOST_MAX_WIDTH": "0.62",
-    "FIELD": "on",
+    "FIELD": "on", "KEEPOUT": "0.035",
     # composition
     "SCALE": "0.70", "NAME": "", "WELCOME": "Welcome, {name}",
     "GOODBYE": "Goodbye, {name}", "HINT": "TYPE A PASSWORD  ·  ENTER TO UNLOCK",
@@ -50,6 +50,7 @@ FRACTIONS = {
     "SCALE": (0.2, 2.0, True),
     "BRACKET_INSET": (0.0, 0.2, False),
     "BRACKET_ARM": (0.0, 0.5, False),
+    "KEEPOUT": (0.0, 0.25, False),
 }
 FLAGS = ("FIELD", "MENU_HELP")
 

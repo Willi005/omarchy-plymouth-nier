@@ -28,6 +28,11 @@ cat /tmp/pre.script ../theme/omarchy.script verify.script > /tmp/t.script
 /tmp/plyrun /tmp/t.script amb_alive seg_bone_alive shard_alive ui_final
 ```
 
+`verify-keepout.script` asserts the ambient field never overlaps the login
+block: it walks `amb.x/y/box` and counts glyphs inside the keep-out rectangle,
+which must be zero at every density and every `KEEPOUT`. Placement happens at
+load, so no frames need to run.
+
 `verify.script` covers the rejected-key visuals; `verify-clock.script` covers
 the paused-progress detection that decides when a key was accepted.
 `@MODE@` is substituted with `boot`, `shutdown` or `reboot` to exercise
