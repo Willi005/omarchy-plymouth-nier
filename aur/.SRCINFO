@@ -1,6 +1,6 @@
 pkgbase = omarchy-plymouth-nier
 	pkgdesc = NieR-inspired theme for the Omarchy boot chain: Limine menu, LUKS unlock and shutdown screens
-	pkgver = 1.5.0
+	pkgver = 1.5.1
 	pkgrel = 1
 	url = https://github.com/Willi005/omarchy-plymouth-nier
 	install = omarchy-plymouth-nier.install
@@ -12,12 +12,13 @@ pkgbase = omarchy-plymouth-nier
 	makedepends = noto-fonts-cjk
 	makedepends = ttf-jetbrains-mono-nerd
 	depends = plymouth
+	optdepends = python: required by omarchy-nier-reconfigure, and lets an upgrade notice that the packaged artwork was built from other settings
 	optdepends = imagemagick: required by omarchy-nier-reconfigure
 	optdepends = fontconfig: required by omarchy-nier-reconfigure
 	optdepends = noto-fonts-cjk: the katakana and the background word
 	optdepends = ttf-jetbrains-mono-nerd: every line of Latin text in the theme
 	backup = etc/omarchy-plymouth-nier.conf
-	source = omarchy-plymouth-nier-1.5.0.tar.gz::https://github.com/Willi005/omarchy-plymouth-nier/archive/refs/tags/v1.5.0.tar.gz
-	sha256sums = 7c0e4fdd9e14ed27f91891ae7b24782ca73fa6d83f916b7ac4502b987a0a4f21
+	source = omarchy-plymouth-nier-1.5.1.tar.gz::https://github.com/Willi005/omarchy-plymouth-nier/archive/refs/tags/v1.5.1.tar.gz
+	sha256sums = dc7f00207258ac467bd61c749da4e5e3aa6fd4cdb76e23d8b0301162a7c9157b
 
 pkgname = omarchy-plymouth-nier
