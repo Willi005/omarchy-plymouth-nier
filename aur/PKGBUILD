@@ -6,7 +6,7 @@
 # repository to a handful of files and makes the geometry reproducible.
 
 pkgname=omarchy-plymouth-nier
-pkgver=1.3.0
+pkgver=1.3.1
 pkgrel=1
 pkgdesc="NieR-inspired theme for the Omarchy boot chain: Limine menu, LUKS unlock and shutdown screens"
 arch=('any')
@@ -21,8 +21,8 @@ backup=('etc/omarchy-plymouth-nier.conf')
 makedepends=('python' 'imagemagick' 'fontconfig' 'noto-fonts-cjk'
              'ttf-jetbrains-mono-nerd')
 install="$pkgname.install"
-source=("$pkgname-$pkgver.tar.gz::https://github.com/Willi005/omarchy-plymouth-nier/archive/refs/tags/v1.3.0.tar.gz")
-sha256sums=('f0257ee31d6206b3c316b72d7b60bc9a313ec04f340eea5a20a5db121d17d72b')
+source=("$pkgname-$pkgver.tar.gz::https://github.com/Willi005/omarchy-plymouth-nier/archive/refs/tags/v1.3.1.tar.gz")
+sha256sums=('549395c81a4f005421db8ec53ad2c90488d44263e6b42a1c7719ae0594dee8d2')
 
 # Where the source files land under $srcdir. Empty here, because makepkg copies
 # local sources straight in; the AUR flavour downloads a release tarball, so
