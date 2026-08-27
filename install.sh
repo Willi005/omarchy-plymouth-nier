@@ -7,6 +7,7 @@ set -euo pipefail
 
 THEME=omarchy-minimal
 DEST=/usr/share/plymouth/themes/$THEME
+SHARE=/usr/share/omarchy-plymouth-nier/limine
 CONF=/etc/plymouth/plymouthd.conf
 HERE=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)
 
@@ -21,10 +22,15 @@ trap 'rm -rf "$tmp"' EXIT
 
 echo ":: generating assets"
 python3 "$HERE/build-theme.py" "$tmp/theme"
+python3 "$HERE/build-limine.py" "$tmp/limine"
 
 echo ":: installing to $DEST"
 install -dm755 "$DEST"
 install -m644 -t "$DEST" "$tmp/theme/"*
+
+echo ":: installing the Limine wallpaper and config block to $SHARE"
+install -dm755 "$SHARE"
+install -m644 -t "$SHARE" "$tmp/limine/"*
 
 echo ":: forcing DeviceScale=1"
 if [ ! -f "$CONF" ]; then
@@ -45,3 +51,15 @@ mkinitcpio -P
 echo
 echo "Done. Roll back with:"
 echo "    sudo plymouth-set-default-theme omarchy && sudo mkinitcpio -P"
+
+# The bootloader menu. Rather than reimplement the splice, source the pacman
+# scriptlet and call its function: one implementation, so the two paths cannot
+# drift apart. The file only defines variables and functions, so sourcing it
+# has no side effects.
+if [ -r "$HERE/omarchy-plymouth-nier.install" ]; then
+    # shellcheck source=/dev/null
+    . "$HERE/omarchy-plymouth-nier.install"
+    _apply_limine
+else
+    echo ":: WARNING: scriptlet not found, boot menu left alone." >&2
+fi

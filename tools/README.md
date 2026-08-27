@@ -44,8 +44,52 @@ Two traps, both learned the hard way:
   through to an existing global of the same name, so a test loop using `i` or
   `b` gets clobbered mid-iteration by `refresh_callback`. Use `qq`/`zz`/`qi`.
 
+## The Limine menu — this one you can actually see
+
+Limine is an ordinary EFI binary, so unlike Plymouth it boots in a VM and you
+can screenshot it before committing anything to `/boot`.
+
+```bash
+sudo pacman -S --needed qemu-system-x86 edk2-ovmf
+
+mkdir -p esp/EFI/BOOT esp/omarchy-nier
+cp /usr/share/limine/BOOTX64.EFI esp/EFI/BOOT/BOOTX64.EFI
+cp /usr/share/omarchy-plymouth-nier/limine/bg.png esp/omarchy-nier/bg.png
+cp /boot/limine.conf esp/limine.conf     # the live one works as-is
+sed -i 's/^timeout: .*/timeout: 60/' esp/limine.conf
+cp /usr/share/edk2/x64/OVMF_VARS.4m.fd vars.fd
+
+{ sleep 25; echo "screendump out.ppm"; sleep 5; echo quit; } | \
+qemu-system-x86_64 -machine q35 -m 512 \
+  -drive if=pflash,format=raw,readonly=on,file=/usr/share/edk2/x64/OVMF_CODE.4m.fd \
+  -drive if=pflash,format=raw,file=vars.fd \
+  -drive file=fat:rw:esp,format=raw \
+  -vga none -device VGA,xres=1920,yres=1080,vgamem_mb=64 \
+  -display none -monitor stdio > qemu.log 2>&1
+magick out.ppm out.png
+```
+
+No `mtools` needed: `fat:rw:` exposes a directory as a FAT volume. `-vga none`
+must come before `-device VGA` or you get two adapters, and `vgamem_mb` has to
+be raised for large modes — 2880x1800x4 is 20.7 MB and the 16 MB default
+silently refuses the mode.
+
+**It verifies composition, not resolution.** The screen mode is handed to QEMU
+on the command line, so any conclusion that depends on it is circular. That
+already cost a round: a `term_font_scale` derived from the panel size looked
+right in a screenshot here and was far too large on real firmware, because
+Limine picks its own GOP mode. Use this for palette, transparency, brackets,
+the entry tree and whether the config parses.
+
+Reading the source was not enough either. Only booting it revealed a second
+help row (`S Firmware Setup   B Blank Entry`) and that an entry's `comment:`
+is drawn at the foot of the screen rather than beside the entry.
+
 ## Previews
 
 `preview-arranque.html` and `preview-apagado.html` are canvas simulations of
 the boot and shutdown screens, used to agree on the design before baking it
 into the boot image. They carry the same `SCALE` constant as `build-theme.py`.
+`preview-bootloader.html` does the same for the Limine menu, on a real 8x16
+character grid quantised to 1 bit; its resolution selector models the
+*wallpaper*, which is per-resolution, not the mode the menu will run at.

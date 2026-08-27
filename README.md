@@ -1,8 +1,8 @@
 # omarchy-plymouth-nier
 
-A NieR:Automata-flavoured Plymouth theme for [Omarchy](https://omarchy.org):
-the screen that asks for the LUKS passphrase at power-on, and the farewell
-screen at shutdown.
+A NieR:Automata-flavoured theme for the whole [Omarchy](https://omarchy.org)
+boot chain: the Limine bootloader menu, the screen that asks for the LUKS
+passphrase at power-on, and the farewell screen at shutdown.
 
 Bone `#CFC9B0` on near-black. A very dim ステム ghost word breathing behind a
 field of katakana that swap on their own timers, a vertical シ ス テ ム column,
@@ -13,6 +13,11 @@ everything away and leaves a single progress line along the bottom edge.
 
 Everything visible is a pre-rendered PNG, so nothing depends on font
 resolution inside the initramfs.
+
+The bootloader menu that precedes it is a plain 1-bit character grid, so it
+gets the restrained version of the same language: flat ground, the bone
+palette, and four corner brackets. See
+[The bootloader menu](#the-bootloader-menu).
 
 ## Install
 
@@ -27,7 +32,10 @@ makepkg -si
 
 That generates the 206 assets, installs them to
 `/usr/share/plymouth/themes/omarchy-minimal`, forces `DeviceScale=1`, sets the
-default theme and rebuilds the boot image.
+default theme and rebuilds the boot image. It then themes the Limine menu:
+the wallpaper is copied onto the ESP and a delimited block is spliced into the
+global header of `limine.conf`. Boot entries are never touched, and no
+initramfs rebuild is needed for that part — Limine reads its config at boot.
 
 If a previous copy was installed by hand, pacman will refuse to overwrite
 files it does not own. Take ownership once with:
@@ -42,12 +50,20 @@ Anywhere else: `sudo ./install.sh`.
 
 ## Roll back
 
+`sudo pacman -R omarchy-plymouth-nier` undoes everything: it restores the stock
+Plymouth theme, rebuilds the boot image, puts back the original `limine.conf`
+header and removes the wallpaper. By hand:
+
 ```bash
 sudo plymouth-set-default-theme omarchy && sudo mkinitcpio -P
+sudo cp /boot/limine.conf.omarchy-nier.bak /boot/limine.conf   # see note
+sudo rm -rf /boot/omarchy-nier
 ```
 
-The stock theme at `/usr/share/plymouth/themes/omarchy/` is never modified.
-Removing the package does this for you.
+The stock Plymouth theme at `/usr/share/plymouth/themes/omarchy/` is never
+modified. The `.bak` holds the whole file as it was at first install, so if
+boot entries have changed since, copy only its header — everything above the
+first line starting with `/`. The package's own revert does exactly that.
 
 ## Making it yours
 
@@ -59,6 +75,7 @@ variable, which wins over the file:
 | `NAME` | the account's real name, else its login name | `Welcome, <NAME>` and `Goodbye, <NAME>` |
 | `RESOLUTION` | `auto` | panel size the assets are rendered for |
 | `GHOST_WORD` | `システム` | the large word breathing behind everything |
+| `BRANDING` | `OMARCHY` | the line at the top of the Limine boot menu |
 
 ```bash
 PLYMOUTH_NAME="Ada" makepkg -sif
@@ -124,6 +141,52 @@ both failed, because argon2 starves the frame timer and the pause freezes that
 clock. For reference this machine's header is argon2id with 9 iterations over
 1 GiB and takes **15.8 s** to reject a key.
 
+## The bootloader menu
+
+Limine's menu is not a graphics engine. It is a character grid with a 16-colour
+palette and one full-screen wallpaper behind it, and three of its properties
+decide the whole design:
+
+**It cannot draw antialiased text.** `term_font` wants a CP437 bitmap and
+Limine "assumes all fonts are of width 8" — one byte per glyph row. The
+terminal is a 1-bit blitter. There is no smooth-text setting at any resolution,
+which is why the theme keeps Limine's built-in font and puts no artwork behind
+the text: with a bare ground, the 8-pixel limit has nothing to spoil.
+
+**`term_background` is `TTRRGGBB` where `TT=00` is opaque and `TT=FF` is fully
+transparent** — the reverse of the usual ARGB convention. `colour_blend()` in
+`common/lib/gterm.c` computes `alpha = 255 - A(fg)`, and Limine's own default
+`0x00000000` is opaque black. The theme uses `FF000000` so the wallpaper shows
+through every cell.
+
+**The menu centres itself.** `(cols - max_tree_len - 3)/2` and
+`(rows - max_tree_height)/2` in `common/menu.c`. There is nothing to configure
+and nothing that can override it. The `┌─┤ … ├─┐` frame you will find in the
+binary belongs to the *editor*, not the menu — entries float, and
+`interface_branding` gets its own centred row.
+
+**Do not derive the text layer from the panel size.** `/sys/class/drm` reports
+the *panel's* mode, but the menu runs at whatever GOP mode Limine picks when
+`interface_resolution` is unset, and the two need not match. Computing
+`term_font_scale` from the detected resolution produced text far too large on
+real hardware while looking correct in a QEMU screenshot — QEMU's resolution is
+given on the command line, so that check was circular. The menu's own mode
+cannot be read back from a booted system either. The theme therefore sets
+neither `term_font_scale` nor `term_margin` and keeps Limine's defaults, as the
+stock Omarchy config did. Only the wallpaper is per-resolution, and it is
+`stretched`.
+
+One capability left unused: `wallpaper` may appear several times and Limine
+picks one at random per boot. With a bare ground there is nothing to vary, but
+it is the only route to variation on this screen.
+
+### Previewing it
+
+Unlike Plymouth, this screen **can** be seen before you commit it — Limine is
+an ordinary EFI binary and boots in a VM. `tools/README.md` has the recipe.
+It verifies composition, palette, transparency, brackets and that the config
+parses; it cannot tell you which GOP mode real firmware will pick.
+
 ## Verifying a change without rebooting
 
 See `tools/README.md`. Short version: `plyparse` runs Plymouth's real parser,
@@ -138,12 +201,16 @@ working keyboard.
 ## Layout
 
 ```
-build-theme.py                  generates every asset, the theme script and the metadata
-theme.conf                      name, target resolution, background word
+build-theme.py                  generates every Plymouth asset, the script and the metadata
+build-limine.py                 generates the Limine wallpaper and config block
+theme.conf                      name, target resolution, background word, menu branding
 CLAUDE.md                       working notes: the traps, and how to verify a change
+docs/                           design specs
 PKGBUILD                        Arch package; builds assets at package time
-omarchy-plymouth-nier.install   pacman scriptlet: DeviceScale, set-default-theme, mkinitcpio
-install.sh                      same thing without pacman
+omarchy-plymouth-nier.install   pacman scriptlet: DeviceScale, set-default-theme,
+                                mkinitcpio, and the limine.conf splice
+install.sh                      same thing without pacman; sources the scriptlet
+                                so the two paths cannot drift apart
 tools/                          plyparse, plyrun, assertions, HTML previews
 ```
 
