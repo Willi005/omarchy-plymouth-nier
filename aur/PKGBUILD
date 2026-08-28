@@ -6,7 +6,7 @@
 # repository to a handful of files and makes the geometry reproducible.
 
 pkgname=omarchy-plymouth-nier
-pkgver=1.7.0
+pkgver=1.7.1
 pkgrel=1
 pkgdesc="NieR-inspired theme for the Omarchy boot chain: Limine menu, LUKS unlock and shutdown screens"
 arch=('any')
@@ -23,8 +23,8 @@ backup=('etc/omarchy-plymouth-nier.conf')
 makedepends=('python' 'imagemagick' 'fontconfig' 'noto-fonts-cjk'
              'ttf-jetbrains-mono-nerd')
 install="$pkgname.install"
-source=("$pkgname-$pkgver.tar.gz::https://github.com/Willi005/omarchy-plymouth-nier/archive/refs/tags/v1.7.0.tar.gz")
-sha256sums=('e23fb77457b74db8245ffc0cd82803749c7f1e2de26eccc86a73b6295864407a')
+source=("$pkgname-$pkgver.tar.gz::https://github.com/Willi005/omarchy-plymouth-nier/archive/refs/tags/v1.7.1.tar.gz")
+sha256sums=('599f55ddbc750c5793b8afd37c08daf523a1d5b23f697d1a9fcb55b7c8a527f5')
 
 # Where the source files land under $srcdir. Empty here, because makepkg copies
 # local sources straight in; the AUR flavour downloads a release tarball, so
@@ -36,6 +36,14 @@ _srcsub="/$pkgname-$pkgver"
 _theme=omarchy-minimal
 
 build() {
+    # Start from nothing. build-theme.py deliberately skips any PNG that is
+    # already there, which makes iterating on the script fast and makes a
+    # reused $srcdir silently poisonous: 1.7.0 shipped a script that loads
+    # progress.png without shipping progress.png, because `makepkg -f` ran
+    # over the 1.6.0 build's theme/ and the new asset was never rendered.
+    # A fresh render costs about two seconds.
+    rm -rf "$srcdir/theme" "$srcdir/limine"
+
     # Renders every asset at its exact final pixel size for THIS machine's
     # panel: nothing antialiased is ever scaled at runtime, because Plymouth's
     # Image.Scale is a nearest-neighbour sampler and destroys artwork. The
