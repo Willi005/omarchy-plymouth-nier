@@ -887,3 +887,17 @@ comm -23 want have          # must be empty
 Upgrading over an affected install needs
 `--overwrite /usr/share/plymouth/themes/omarchy-minimal/progress.png` once,
 because the reconfigure-generated copy is unowned.
+
+### Confirmed on hardware
+
+Rebooted with `PROGRESS_HEIGHT=6` and `PROGRESS=#60522E` on the Flexoki light
+palette. The bar reads correctly, and the shutdown flash went from clearly
+visible to **imperceptible** — better than the estimate, which had only claimed
+a shortening. The theme's share of that window was apparently most of what was
+perceptible, even though it is a minority of the milliseconds.
+
+One packaging consequence worth remembering: `theme.conf` is in `backup=`, so a
+new key never reaches an existing `/etc/omarchy-plymouth-nier.conf`. pacman
+leaves a `.pacnew` instead, and the user's screen keeps the old default until
+someone merges it. Every future config key needs that said out loud rather than
+assumed.
