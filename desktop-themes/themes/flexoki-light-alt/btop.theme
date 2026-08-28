@@ -1,0 +1,88 @@
+# btop para Flexoki Light Alt.
+#
+# Vive en el directorio del tema a propósito: omarchy-theme-set-templates copia
+# primero lo que el tema trae y solo genera desde la plantilla lo que falta, así
+# que esto gana sobre btop.theme.tpl sin tocar /usr/share ni afectar a Nier
+# Black, que tiene el suyo.
+#
+# Mismo criterio que en Nier Black, con la dirección invertida: sobre papel,
+# "más intenso" es MÁS OSCURO. Las dos rampas van de claro a tinta y las dos
+# están verificadas monótonas en luminancia.
+#
+#   papel -> tinta  #FFFCF0 #F2EFE4 #E6E4D9 #D5CEBC #BCB3A1 #9A8F7C #6E6558 #443E34
+#   café            #E6DCC6 #D0C0A0 #B0966B #9C7C50 #8E6944 #78542F #633D1C
+#
+# El fondo NO se toca: los cuatro tonos de papel son los del stock y ese era el
+# encargo del tema.
+
+theme[main_bg]="#FFFCF0"
+theme[main_fg]="#100F0F"
+theme[title]="#100F0F"
+theme[hi_fg]="#8E6944"
+theme[selected_bg]="#E9DCC2"
+theme[selected_fg]="#78542F"
+theme[inactive_fg]="#BCB3A1"
+theme[graph_text]="#443E34"
+theme[meter_bg]="#E6E4D9"
+theme[proc_misc]="#8A8073"
+
+# Contenedores: los cuatro en el café del acento.
+theme[cpu_box]="#8E6944"
+theme[mem_box]="#8E6944"
+theme[net_box]="#8E6944"
+theme[proc_box]="#8E6944"
+
+# Divisores internos más claros, para que el marco exterior mande.
+theme[div_line]="#BCB3A1"
+
+# Temperatura: la única rampa que cambia de tono, porque acaba en alerta.
+theme[temp_start]="#BCB3A1"
+theme[temp_mid]="#C6A453"
+theme[temp_end]="#B46356"
+
+# CPU: rampa de café, más oscuro cuanto más carga.
+theme[cpu_start]="#C7B48E"
+theme[cpu_mid]="#9C7C50"
+theme[cpu_end]="#633D1C"
+
+# Los cuatro medidores se separan por valor, no por tono: usado es el más
+# oscuro y libre el más cercano al papel, que es el orden en que se leen.
+theme[used_start]="#B0966B"
+theme[used_mid]="#8E6944"
+theme[used_end]="#633D1C"
+
+theme[cached_start]="#D0C0A0"
+theme[cached_mid]="#B0966B"
+theme[cached_end]="#9C7C50"
+
+theme[available_start]="#DDD0B4"
+theme[available_mid]="#C6A453"
+theme[available_end]="#A89877"
+
+theme[free_start]="#E6DCC6"
+theme[free_mid]="#D0C0A0"
+theme[free_end]="#BCB3A1"
+
+# Red: bajada en café, subida en terracota, para poder distinguirlas.
+theme[download_start]="#C7B48E"
+theme[download_mid]="#9C7C50"
+theme[download_end]="#633D1C"
+
+theme[upload_start]="#D6BCA9"
+theme[upload_mid]="#B08268"
+theme[upload_end]="#8A4F35"
+
+theme[process_start]="#C7B48E"
+theme[process_mid]="#9C7C50"
+theme[process_end]="#633D1C"
+
+# Rampa de fondo a primer plano. La de la plantilla no es monótona: pasa por
+# foreground antes que por light_foreground y bright_foreground. Ésta baja.
+theme[gradient_color_0]="#FFFCF0"
+theme[gradient_color_1]="#F2EFE4"
+theme[gradient_color_2]="#E6E4D9"
+theme[gradient_color_3]="#D5CEBC"
+theme[gradient_color_4]="#BCB3A1"
+theme[gradient_color_5]="#9A8F7C"
+theme[gradient_color_6]="#6E6558"
+theme[gradient_color_7]="#443E34"

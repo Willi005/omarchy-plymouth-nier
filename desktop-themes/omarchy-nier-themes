@@ -1,0 +1,222 @@
+#!/bin/bash
+#
+# Link this package's Omarchy themes into the user's theme directory.
+#
+# A pacman package cannot write into anyone's home, and Omarchy looks for user
+# themes in ~/.config/omarchy/themes. So the artwork is package-owned under
+# /usr/share and each theme appears in the home directory as a symlink.
+#
+# That is not a workaround, it is the case Omarchy documents for itself.
+# omarchy-theme-list globs `\( -type d -o -type l \)`, and the test that decides
+# whether a theme is treated as foreign is:
+#
+#     theme_came_from_a_repo() { [[ ! -L $source && -d $source/.git ]]; }
+#
+# The `! -L` is deliberate -- its own comment calls a symlink to the user's own
+# working copy "theirs to fill however they like". A theme installed with
+# `omarchy theme install <url>` is held to a deny list instead and loses any
+# *.lua, terminal config and vscode.json. flexoki-light-alt ships a neovim.lua
+# and a vscode.json that name real upstream packages, so that distinction is
+# the reason this is a package and not a git repo to clone.
+#
+# Nothing writes back into a theme directory: `omarchy theme set` only copies
+# out of it, and the current-background pointer lives in
+# ~/.local/state/omarchy/current. Read-only ownership by pacman is fine.
+
+set -u
+
+# Overridable so the linker can be exercised against a scratch tree instead of
+# the installed one. Nothing in normal use sets it.
+SHARE=${OMARCHY_NIER_THEMES_SHARE:-/usr/share/omarchy-nier-themes}
+THEMES_SRC="$SHARE/themes"
+HOOKS_SRC="$SHARE/hooks"
+
+CONFIG="${XDG_CONFIG_HOME:-$HOME/.config}/omarchy"
+THEMES_DST="$CONFIG/themes"
+HOOKS_DST="$CONFIG/hooks"
+# Backups must NOT land in THEMES_DST. omarchy-theme-list globs every directory
+# at depth 1 there, so a `nier-black.bak-20260828` sitting next to the real one
+# is offered in the theme menu as "Nier Black.bak 20260828".
+BACKUP_DST="$CONFIG/nier-themes-backup"
+
+FORCE=0
+STATUS=0
+
+usage() {
+    cat <<'EOF'
+Usage: omarchy-nier-themes <command> [--force]
+
+  link      symlink the packaged themes into ~/.config/omarchy/themes
+            and copy the theme-set hook they need
+  unlink    remove those symlinks and the hook
+  status    show what is currently linked
+
+  --force   with `link`, move an existing real directory aside to
+            <name>.bak-<timestamp> instead of refusing
+
+Themes: nier-black, flexoki-light-alt
+EOF
+}
+
+say() { printf '  %-22s %s\n' "$1" "$2"; }
+
+# Only ever removes a symlink that points into this package. A real directory
+# is somebody's work -- possibly the copy this package was made from -- and is
+# never touched without --force.
+link_one() {
+    local name=$1
+    local src="$THEMES_SRC/$name"
+    local dst="$THEMES_DST/$name"
+
+    if [[ ! -d $src ]]; then
+        say "$name" "missing from $THEMES_SRC (broken install?)"
+        return 1
+    fi
+
+    if [[ -L $dst ]]; then
+        if [[ $(readlink -f "$dst") == "$(readlink -f "$src")" ]]; then
+            say "$name" "already linked"
+            return 0
+        fi
+        say "$name" "a symlink points elsewhere ($(readlink "$dst")); left alone"
+        return 1
+    fi
+
+    if [[ -e $dst ]]; then
+        if (( FORCE )); then
+            local backup="$BACKUP_DST/$name-$(date +%Y%m%d-%H%M%S)"
+            mkdir -p "$BACKUP_DST"
+            mv "$dst" "$backup"
+            ln -s "$src" "$dst"
+            say "$name" "linked; previous copy kept at $backup"
+            return 0
+        fi
+        say "$name" "a real directory is already there; not touching it (see --force)"
+        return 1
+    fi
+
+    ln -s "$src" "$dst"
+    say "$name" "linked"
+}
+
+unlink_one() {
+    local name=$1
+    local dst="$THEMES_DST/$name"
+
+    if [[ ! -e $dst && ! -L $dst ]]; then
+        say "$name" "not present"
+        return 0
+    fi
+
+    if [[ ! -L $dst ]]; then
+        say "$name" "a real directory, not our symlink; left alone"
+        return 0
+    fi
+
+    if [[ $(readlink -f "$dst") != "$(readlink -f "$THEMES_SRC/$name")" ]]; then
+        say "$name" "symlink points elsewhere; left alone"
+        return 0
+    fi
+
+    rm "$dst"
+    say "$name" "unlinked"
+}
+
+status_one() {
+    local name=$1
+    local dst="$THEMES_DST/$name"
+
+    if [[ -L $dst ]]; then
+        say "$name" "symlink -> $(readlink "$dst")"
+    elif [[ -d $dst ]]; then
+        say "$name" "real directory (not from this package)"
+    else
+        say "$name" "not present"
+    fi
+}
+
+# The hook is copied rather than symlinked: Omarchy runs everything in
+# theme-set.d, and a dangling symlink there after an uninstall would be an
+# error on every theme change. A copy is inert once the package is gone, and
+# `unlink` removes it anyway.
+link_hook() {
+    local src="$HOOKS_SRC/theme-set.d/dark-browser-chrome"
+    local dst="$HOOKS_DST/theme-set.d/dark-browser-chrome"
+
+    [[ -f $src ]] || return 0
+    mkdir -p "${dst%/*}"
+
+    if [[ -f $dst ]] && ! cmp -s "$src" "$dst"; then
+        say "theme-set hook" "a different version is installed; left alone"
+        return 0
+    fi
+
+    install -m755 "$src" "$dst"
+    say "theme-set hook" "installed"
+}
+
+unlink_hook() {
+    local src="$HOOKS_SRC/theme-set.d/dark-browser-chrome"
+    local dst="$HOOKS_DST/theme-set.d/dark-browser-chrome"
+
+    [[ -f $dst ]] || return 0
+
+    if [[ -f $src ]] && ! cmp -s "$src" "$dst"; then
+        say "theme-set hook" "modified locally; left alone"
+        return 0
+    fi
+
+    rm -f "$dst"
+    say "theme-set hook" "removed"
+}
+
+[[ $# -ge 1 ]] || { usage; exit 1; }
+CMD=$1
+shift
+for arg in "$@"; do
+    case "$arg" in
+        --force) FORCE=1 ;;
+        *) echo "Unknown option: $arg" >&2; exit 1 ;;
+    esac
+done
+
+case "$CMD" in
+    link)
+        mkdir -p "$THEMES_DST"
+        for t in nier-black flexoki-light-alt; do link_one "$t" || STATUS=1; done
+        link_hook
+        if (( STATUS )); then
+            echo
+            echo "Some themes were left alone. Nothing was deleted." >&2
+            echo "Re-run with --force to move an existing directory aside first." >&2
+        else
+            echo
+            echo "Apply one with: omarchy theme set \"Nier Black\""
+        fi
+        exit $STATUS
+        ;;
+    unlink)
+        for t in nier-black flexoki-light-alt; do unlink_one "$t"; done
+        unlink_hook
+        # A theme that is currently applied stays applied: omarchy copies it
+        # into its own staging directory at set time. It simply will not be
+        # offered again.
+        ;;
+    status)
+        say "package themes" "$THEMES_SRC"
+        for t in nier-black flexoki-light-alt; do status_one "$t"; done
+        if [[ -f $HOOKS_DST/theme-set.d/dark-browser-chrome ]]; then
+            say "theme-set hook" "installed"
+        else
+            say "theme-set hook" "not installed"
+        fi
+        ;;
+    -h | --help | help)
+        usage
+        ;;
+    *)
+        echo "Unknown command: $CMD" >&2
+        usage >&2
+        exit 1
+        ;;
+esac

@@ -1,0 +1,24 @@
+#!/bin/bash
+# Keep the browser dark under a light theme.
+#
+# Omarchy derives the desktop colour scheme from `mode` in the theme's
+# colors.toml: omarchy-theme-set-gnome (line 326 of omarchy-theme-set) sets
+# color-scheme to prefer-light for a light theme, and this hook runs after it
+# at line 339, so it is the right place to override the result.
+#
+# Editing `mode` in the theme instead would be wrong: mode also drives which
+# variant apps pick for their syntax themes, so a light palette declared dark
+# gives dark highlighting on a light paper.
+#
+# Scope worth knowing: color-scheme is the only lever there is, and it is
+# system-wide. Everything that honours the desktop preference follows it --
+# libadwaita apps and GTK4 dialogs included -- not the browser alone. The GTK
+# theme itself is left as omarchy set it, so GTK3 apps stay light.
+#
+# $1 is the theme's slug.
+
+case "$1" in
+  flexoki-light-alt | flexoki_light_alt)
+    gsettings set org.gnome.desktop.interface color-scheme "prefer-dark"
+    ;;
+esac

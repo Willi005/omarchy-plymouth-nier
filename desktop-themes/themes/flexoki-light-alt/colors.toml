@@ -1,0 +1,61 @@
+# Flexoki Light Alt
+#
+# Flexoki Light's paper, with a warmer register on top of it.
+#
+# The four background keys below are byte-identical to the stock theme and must
+# stay that way: they are the surface you see in the terminal and in every other
+# themed app, and the whole point of this variant is that the paper does not
+# move. Everything else -- the accent, the chromatic slots, the secondary text
+# tones -- was re-solved.
+#
+# Method rather than taste: each slot keeps roughly its own hue position, so a
+# terminal can still tell a string from a keyword, but the saturation is about
+# halved and every hue is nudged warm. Then the value was solved so each slot
+# lands on the SAME contrast ratio against the paper that the stock theme gave
+# it. The family reads sepia instead of rainbow without losing legibility.
+#
+# The blue is the clearest case: #205EA6 at 6.4:1 was the loudest thing on the
+# screen; #627494 is a dusty slate at 4.6:1. The dark green #879A39 became the
+# olive #849A59 at the same 3.0:1.
+
+mode = "light"
+
+# Beige leaning coffee. It is the active state everywhere -- selections,
+# highlights, focused controls -- so it needs to be seen without shouting:
+# 4.8:1 against the paper, where the stock blue sat at 6.4:1.
+accent = "#8E6944"
+selection = "#E9DCC2"
+muted = "#BCB3A1"
+
+# ---- untouched, deliberately ----------------------------------------------
+background = "#FFFCF0"
+dark_background = "#f2efe4"
+darker_background = "#e5e2d8"
+lighter_background = "#E6E4D9"
+# ---------------------------------------------------------------------------
+
+foreground = "#100F0F"
+dark_foreground = "#8A8073"
+light_foreground = "#443E34"
+bright_foreground = "#100F0F"
+
+# Coffee to beige, the accent family stretched across the outline. Stronger
+# than the first pass: the deep end reads clearly against the paper and the
+# light end keeps it from looking like a drawn box.
+hyprland_active_border = "rgba(8e6944ee) rgba(c3b596ee) 45deg"
+
+red = "#B46356"
+orange = "#BC8055"
+yellow = "#C6A453"
+green = "#849A59"
+cyan = "#66A498"
+blue = "#627494"
+magenta = "#AF7385"
+brown = "#633D1C"
+
+bright_red = "#D17A6D"
+bright_yellow = "#E7C26C"
+bright_green = "#9EB56F"
+bright_cyan = "#7EC1B4"
+bright_blue = "#788CAF"
+bright_magenta = "#CC8C9F"

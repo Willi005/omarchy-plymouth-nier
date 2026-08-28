@@ -1,0 +1,75 @@
+# A package cannot write into a home directory, and Omarchy reads user themes
+# from ~/.config/omarchy/themes. So the link is made here, on behalf of whoever
+# invoked pacman -- the same trick nierconf.py already uses to find out whose
+# name goes on the boot screen.
+#
+# This never fails the transaction. If a real directory is already sitting at
+# the target -- which is exactly the case on the machine these themes were
+# written on -- the linker refuses and says so, and the install still succeeds.
+
+_invoking_user() {
+    local uid=${PKEXEC_UID:-${SUDO_UID:-}}
+    [[ -n $uid ]] || return 1
+    getent passwd "$uid" | cut -d: -f1
+}
+
+# runuser rather than `su -`: no PAM prompt, no login shell sourcing profiles
+# into a pacman transaction. HOME has to be passed explicitly because the
+# scriptlet's is root's, and XDG_CONFIG_HOME is dropped for the same reason --
+# if root has one set, it is not the user's.
+_as_user() {
+    local uid user home
+    uid=${PKEXEC_UID:-${SUDO_UID:-}}
+    [[ -n $uid ]] || return 1
+    user=$(getent passwd "$uid" | cut -d: -f1)
+    home=$(getent passwd "$uid" | cut -d: -f6)
+    [[ -n $user && -d $home ]] || return 1
+    runuser -u "$user" -- env -u XDG_CONFIG_HOME "HOME=$home" \
+        omarchy-nier-themes "$1" 2>&1 || true
+}
+
+_link_for_user() { _as_user link; }
+
+post_install() {
+    cat <<'EOF'
+:: Two Omarchy desktop themes: Nier Black and Flexoki Light Alt.
+EOF
+
+    if ! _link_for_user; then
+        cat <<'EOF'
+:: Could not tell which user to link for. Run this once, as yourself:
+::     omarchy-nier-themes link
+EOF
+    fi
+
+    cat <<'EOF'
+::
+:: Apply one with `omarchy theme set "Nier Black"`, or from the theme menu.
+:: `omarchy-nier-themes status` shows what is linked.
+EOF
+}
+
+post_upgrade() {
+    # The themes live under /usr/share and are replaced by pacman. The symlinks
+    # keep pointing at the same paths, so an upgrade only has to repair a link
+    # that was never made -- and say nothing when there is nothing to do.
+    _link_for_user >/dev/null || true
+}
+
+pre_remove() {
+    if _invoking_user >/dev/null 2>&1; then
+        _as_user unlink
+    else
+        cat <<'EOF'
+:: Symlinks in ~/.config/omarchy/themes were left behind and will dangle.
+:: Remove them with: omarchy-nier-themes unlink   (before uninstalling)
+EOF
+    fi
+}
+
+post_remove() {
+    cat <<'EOF'
+:: A theme that was applied stays applied -- Omarchy copies a theme into its
+:: own staging directory when you set it. Pick another with `omarchy theme set`.
+EOF
+}

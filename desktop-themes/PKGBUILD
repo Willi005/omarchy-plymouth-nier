@@ -1,0 +1,57 @@
+# Maintainer: Guillermo Salgado <g.salgado04@ufromail.cl>
+#
+# Companion to omarchy-plymouth-nier: the same look applied to the desktop
+# rather than to the boot chain. Deliberately a separate package -- this one
+# needs Omarchy and changes the running desktop, the other needs Plymouth and
+# Limine and changes nothing you see after login. Either is useful alone.
+#
+# Everything here is data, so unlike the boot package there is nothing to
+# build. The one moving part is the symlink into the user's home, which a
+# package cannot create directly; see omarchy-nier-themes and the scriptlet.
+
+pkgname=omarchy-nier-themes
+pkgver=1.0.0
+pkgrel=1
+pkgdesc="Two Omarchy desktop themes: Nier Black, and a beige-accented fork of Flexoki Light"
+arch=('any')
+url="https://github.com/Willi005/omarchy-plymouth-nier"
+license=('MIT')
+depends=('bash')
+optdepends=('omarchy: what the themes are for'
+            'omarchy-plymouth-nier: the same palette on the boot chain'
+            'btop: both themes ship a btop.theme'
+            'gsettings-desktop-schemas: the theme-set hook that keeps the
+             browser dark under Flexoki Light Alt')
+install="$pkgname.install"
+
+# The payload is two directory trees, and makepkg's source array takes files
+# and URLs, not directories -- a local directory fails with "was not found in
+# the build directory and is not a URL". Listing the files individually does
+# not work either: local sources are staged by basename, and both themes have
+# a colors.toml, a btop.theme and a preview.png.
+#
+# So this reads the tree straight out of $startdir. That is fine for a package
+# built in place and published to a private repo, and it is the reason this one
+# has no aur/ flavour: going to the AUR would mean sourcing a release tarball,
+# the way the boot package's aur/sync.sh already does.
+source=()
+sha256sums=()
+
+_share="usr/share/$pkgname"
+
+package() {
+    # Read-only ownership by pacman is safe: `omarchy theme set` only ever
+    # copies OUT of a theme directory, and the current-background pointer it
+    # maintains lives in ~/.local/state/omarchy/current.
+    install -dm755 "$pkgdir/$_share"
+    cp -r "$startdir/themes" "$pkgdir/$_share/"
+    cp -r "$startdir/hooks" "$pkgdir/$_share/"
+    find "$pkgdir/$_share" -type d -exec chmod 755 {} +
+    find "$pkgdir/$_share" -type f -exec chmod 644 {} +
+    chmod 755 "$pkgdir/$_share/hooks/theme-set.d/dark-browser-chrome"
+
+    install -Dm755 "$startdir/omarchy-nier-themes" \
+        "$pkgdir/usr/bin/omarchy-nier-themes"
+    install -Dm644 "$startdir/LICENSE" \
+        "$pkgdir/usr/share/licenses/$pkgname/LICENSE"
+}

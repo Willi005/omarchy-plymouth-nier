@@ -1,6 +1,10 @@
-# makepkg working directories and output
+# makepkg working directories and output. Anchored per-package rather than
+# globally: there are two PKGBUILDs now, one at the root and one under
+# desktop-themes/, and each grows its own src/ and pkg/ where it is built.
 /src/
 /pkg/
+/desktop-themes/src/
+/desktop-themes/pkg/
 *.pkg.tar.*
 *.log
 

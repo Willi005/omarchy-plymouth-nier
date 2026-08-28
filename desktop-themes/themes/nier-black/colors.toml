@@ -1,0 +1,57 @@
+# Nier Black
+#
+# The desktop half of the NieR:Automata boot chain. The five colours the boot
+# menu, the LUKS prompt and the shutdown screen already share come straight
+# across, so the machine reads as one piece from power-on to desktop:
+#
+#   GROUND #050505   BONE #CFC9B0   DIM #4A4638   CHROME #55503F   RUST #B0563F
+#
+# Two decisions worth knowing before editing.
+#
+# The accent is BONE, not RUST. In the game the interface is monochrome and red
+# means an alert; the boot theme keeps rust for a rejected passphrase and
+# nothing else. Spending it on every selection highlight would throw away the
+# one moment the design has to raise its voice, so rust stays as `red` and the
+# accent is the same bone the text is written in.
+#
+# The ANSI slots are not monochrome, because a terminal that cannot tell a
+# string from a keyword is unusable. They keep their standard hue and borrow
+# the bone family's saturation (0.30) and value, which lands every one of them
+# between 5:1 and 7:1 against the ground -- distinguishable, but too desaturated
+# to break the monochrome read.
+
+mode = "dark"
+
+accent = "#CFC9B0"
+selection = "#4A4638"
+muted = "#55503F"
+
+background = "#050505"
+dark_background = "#020202"
+darker_background = "#000000"
+lighter_background = "#14120F"
+
+foreground = "#CFC9B0"
+dark_foreground = "#55503F"
+light_foreground = "#A29C86"
+bright_foreground = "#EDE9DA"
+
+# The HUD brackets of the login screen are drawn chrome-to-bone; the window
+# outline is the same move at 45 degrees.
+hyprland_active_border = "rgba(55503fee) rgba(cfc9b0ee) 45deg"
+hyprland_inactive_border = "rgba(4a4638aa)"
+
+red = "#B0563F"
+yellow = "#9E946F"
+green = "#829E6F"
+cyan = "#6F9E9D"
+blue = "#6F869E"
+magenta = "#9E6F8E"
+brown = "#9E866F"
+
+bright_red = "#C86B52"
+bright_yellow = "#C7BC93"
+bright_green = "#A9C793"
+bright_cyan = "#93C7C5"
+bright_blue = "#93ADC7"
+bright_magenta = "#C793B6"

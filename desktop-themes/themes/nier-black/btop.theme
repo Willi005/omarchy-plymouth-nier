@@ -1,0 +1,94 @@
+# btop para Nier Black.
+#
+# Este archivo existe en el directorio del tema a propósito: omarchy-theme-set-templates
+# copia primero lo que el tema trae y solo genera desde la plantilla lo que falta
+# ("Don't overwrite configs already exists in the output directory"), así que esto
+# gana sobre btop.theme.tpl sin tocar nada en /usr/share ni afectar a otros temas.
+#
+# Dos cambios frente a lo que generaba la plantilla:
+#
+# 1. Los cuatro contenedores comparten el mismo hueso. La plantilla les daba un
+#    color distinto a cada uno -- magenta, verde, rojo, acento -- que en una
+#    paleta monocroma se lee como cuatro temas peleando en una pantalla.
+#
+# 2. Los degradados corren por una rampa de hueso en vez de por el arcoíris
+#    teal/azul/magenta. Se distinguen por VALOR, no por tono, que es como
+#    funciona el resto del tema. La única excepción es la temperatura, que
+#    termina en óxido: en este proyecto el óxido significa alerta y este es
+#    justo un caso de alerta.
+#
+# La rampa, verificada monótona en luminancia:
+#   #050505 #14120F #2A2720 #3A372C #4A4638 #55503F #7A7463 #A29C86 #CFC9B0
+
+theme[main_bg]="#050505"
+theme[main_fg]="#CFC9B0"
+theme[title]="#CFC9B0"
+theme[hi_fg]="#CFC9B0"
+theme[selected_bg]="#4A4638"
+theme[selected_fg]="#CFC9B0"
+theme[inactive_fg]="#55503F"
+theme[graph_text]="#A29C86"
+theme[meter_bg]="#2A2720"
+theme[proc_misc]="#A29C86"
+
+# Contenedores: los cuatro iguales.
+theme[cpu_box]="#CFC9B0"
+theme[mem_box]="#CFC9B0"
+theme[net_box]="#CFC9B0"
+theme[proc_box]="#CFC9B0"
+
+# Divisores internos un escalón por debajo, para que el marco exterior mande.
+theme[div_line]="#55503F"
+
+# Temperatura: la única rampa que cambia de tono, porque acaba en alerta.
+theme[temp_start]="#55503F"
+theme[temp_mid]="#9E946F"
+theme[temp_end]="#B0563F"
+
+# CPU: rampa de hueso, más brillo cuanto más carga.
+theme[cpu_start]="#55503F"
+theme[cpu_mid]="#A29C86"
+theme[cpu_end]="#CFC9B0"
+
+# Los cuatro medidores de memoria y disco se separan por valor, no por tono:
+# usado es el más brillante y libre el más apagado, que es el orden en que
+# quieres leerlos.
+theme[used_start]="#55503F"
+theme[used_mid]="#A29C86"
+theme[used_end]="#CFC9B0"
+
+theme[cached_start]="#4A4638"
+theme[cached_mid]="#7A7463"
+theme[cached_end]="#A29C86"
+
+theme[available_start]="#4A4638"
+theme[available_mid]="#7A7463"
+theme[available_end]="#9E946F"
+
+theme[free_start]="#3A372C"
+theme[free_mid]="#55503F"
+theme[free_end]="#7A7463"
+
+# Red: bajada en hueso, subida en el ámbar cálido, para poder distinguirlas.
+theme[download_start]="#55503F"
+theme[download_mid]="#A29C86"
+theme[download_end]="#CFC9B0"
+
+theme[upload_start]="#55503F"
+theme[upload_mid]="#9E866F"
+theme[upload_end]="#C7BC93"
+
+theme[process_start]="#55503F"
+theme[process_mid]="#A29C86"
+theme[process_end]="#CFC9B0"
+
+# Rampa de fondo a primer plano. La plantilla la dejaba no monótona
+# (foreground antes que light_foreground y bright_foreground); ésta sube.
+theme[gradient_color_0]="#050505"
+theme[gradient_color_1]="#14120F"
+theme[gradient_color_2]="#2A2720"
+theme[gradient_color_3]="#3A372C"
+theme[gradient_color_4]="#4A4638"
+theme[gradient_color_5]="#55503F"
+theme[gradient_color_6]="#7A7463"
+theme[gradient_color_7]="#A29C86"
