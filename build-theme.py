@@ -64,6 +64,11 @@ DIM = CONF["DIM"]         # ghost word only
 CHROME = CONF["CHROME"]   # bottom hint, secondary labels
 RUST = CONF["RUST"]       # the only chromatic note, and only on a rejected key
 GROUND = CONF["GROUND"]   # the window itself, and the console log behind it
+# The boot progress bar has its own colour. It is the only element that sits on
+# the very bottom edge of the panel, so on a light palette BONE would put a
+# near-black band along an OLED's edge -- readable in theory, unpleasant in
+# practice. Defaults to BONE, which is what the black palette wants anyway.
+PROGRESS = CONF["PROGRESS"]
 
 KATA = CONF["ALPHABET"]
 COLUMN_CHARS = CONF.column      # derived from GHOST_WORD unless set explicitly
@@ -193,6 +198,7 @@ def build_assets(d: Path):
     magick("-size", f"{DOT_BOX}x{DOT_BOX}", "xc:" + BONE, d / "dot.png")
     magick("-size", "8x8", "xc:" + BONE, d / "line.png")
     magick("-size", "8x8", "xc:" + RUST, d / "line_rust.png")
+    magick("-size", "8x8", "xc:" + PROGRESS, d / "progress.png")
 
 
 def image_loads():
@@ -526,6 +532,7 @@ for (i = 0; i < global.column_count; i++) {
 line.source = Image("line.png");
 
 line.rust_source = Image("line_rust.png");
+line.progress_source = Image("progress.png");
 
 welcome.image = Image("welcome.png");
 welcome.sprite = Sprite(welcome.image);
@@ -945,7 +952,7 @@ fun update_progress(value) {
     global.max_progress = value;
     width = Math.Int(global.W * value);
     if (width < 1) width = 1;
-    progress.sprite.SetImage(line.source.Scale(width, 2));
+    progress.sprite.SetImage(line.progress_source.Scale(width, 2));
     progress.sprite.SetOpacity(0.75);
   }
 }

@@ -27,7 +27,7 @@ HEX = re.compile(r"^#(?:[0-9A-Fa-f]{3}|[0-9A-Fa-f]{6})$")
 DEFAULTS = {
     # palette
     "BONE": "#CFC9B0", "DIM": "#4A4638", "CHROME": "#55503F",
-    "RUST": "#B0563F", "GROUND": "#050505",
+    "RUST": "#B0563F", "GROUND": "#050505", "PROGRESS": "#CFC9B0",
     # field
     "GLYPHS": "20", "STACKS": "6", "STACK_MIN": "2", "STACK_MAX": "6",
     "ALPHABET": "ｱｲｳｴｵｶｷｸｹｺｻｼｽｾｿﾀﾁﾂﾃﾄﾅﾆﾇﾈﾉﾊﾋﾌﾍﾎﾏﾐﾑﾒﾓﾔﾕﾖﾗﾘﾙﾚﾛﾜﾝ",
@@ -40,7 +40,7 @@ DEFAULTS = {
     "BRACKET_INSET": "0.030", "BRACKET_ARM": "0.065", "MENU_HELP": "on",
 }
 
-COLOURS = ("BONE", "DIM", "CHROME", "RUST", "GROUND")
+COLOURS = ("BONE", "DIM", "CHROME", "RUST", "GROUND", "PROGRESS")
 COUNTS = ("GLYPHS", "STACKS", "STACK_MIN", "STACK_MAX")
 # key -> (low, high, clamp?). Clamped values degrade gradually; the rest are
 # refused, because outside their range they produce nonsense rather than

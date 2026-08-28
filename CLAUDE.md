@@ -697,3 +697,51 @@ Built the full theme in all three palettes at 2880x1800:
   `state_after_resume = 3`, `bar_while_frozen = 0`, full restore by frame 90),
   which is the point — the palette changes ink, not behaviour
 - `interface_help_color_bright` per palette: `88836E`, `655F4D`, `555351`
+
+## The progress bar gets its own colour (1.7.0)
+
+New key `PROGRESS`, defaulting to `#CFC9B0` — the same BONE the bar already
+used, so the black palette is unchanged.
+
+The bar is the only element that sits on the very bottom edge of the panel.
+Drawing it in `BONE` is right on a dark ground (7.0:1 composited) and wrong on
+a light one: with Flexoki's `BONE` at `#100F0F` it puts a near-black band along
+the edge of an OLED. Readable in theory, unpleasant in practice, and the one
+place where "the ink colour" and "the right colour" diverge.
+
+`build-theme.py` now emits an eighth flat tile, `progress.png`, and the script
+scales that instead of `line.source`:
+
+```
+line.progress_source = Image("progress.png");
+progress.sprite.SetImage(line.progress_source.Scale(width, 2));
+```
+
+The shipped light palettes get khakis — `#6E6650` for YoRHa, `#9C8B5E` for
+Flexoki. Note the bar draws at 0.75 opacity, so what matters is the composite:
+those land at 2.4:1 and 2.3:1 against their own ground, against the black
+palette's 7.0:1. That is deliberately softer, which is the point.
+
+### Verified
+
+Built in all three palettes at 2880x1800: 208 files each (the new tile), and
+the generated script still differs between palettes **only** in the two
+background lines and the one `Image.Text` colour. `progress.png` vs `line.png`
+per palette: black `207,201,176` / `207,201,176` (identical, as intended),
+yorha `110,102,80` / `59,56,47`, flexoki `156,139,94` / `16,15,15`.
+
+`plyparse` OK on all three; `plyrun` against the script unpacked from the built
+UKI reports the usual values — `frames_total = 312`, `bar_while_frozen = 0`,
+`bar_after_resume = 0.12`, `keepout_hits = 0`, `tearing_after_30 = 0`.
+
+### Not in this package: the early-brightness hook
+
+Related work that deliberately stayed out. The panel comes up at the firmware's
+brightness and `systemd-backlight` only restores the user's value ~20 s in,
+once the real root is mounted — the saved file lives on the encrypted disk, so
+nothing can read it before the passphrase is typed. The fix is an
+`/etc/initcpio/` hook running in the EARLYHOOKS phase, before plymouth's
+`run_hook`, that writes a fixed percentage of `max_brightness`.
+
+It is a machine-local hook, not part of this package: deciding a user's screen
+brightness is not something a theme should do on their behalf.
