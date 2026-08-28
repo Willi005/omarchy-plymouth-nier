@@ -77,6 +77,37 @@ def first_border_colour(value, fallback):
     return "#" + stops[-1]
 
 
+# Stock Omarchy leaves GTK apps as plain Adwaita, so a preview painting the
+# file manager in the palette would be describing something that does not
+# happen. These themes ship a gtk.css and a theme-set hook that installs it, so
+# here it is true -- but the folder icon is not ours: it comes from whatever
+# icons.theme names, and is sampled rather than assumed.
+def folder_colour(icon_theme, fallback):
+    """Sample the real folder icon of the named icon theme.
+
+    Measured rather than tabulated, so switching icons.theme to something else
+    keeps the preview honest without editing this file.
+    """
+    if not icon_theme:
+        return fallback
+    root = Path("/usr/share/icons") / icon_theme
+    if not root.is_dir():
+        return fallback
+    for pattern in ("places/*/folder.svg", "places/*/folder.png",
+                    "*/places/folder.svg", "**/folder.svg", "**/folder.png"):
+        for cand in sorted(root.glob(pattern)):
+            try:
+                out = subprocess.run(
+                    ["magick", str(cand), "-alpha", "remove", "-resize", "1x1!",
+                     "-format", "%[hex:p{0,0}]", "info:"],
+                    check=True, capture_output=True, text=True).stdout.strip()
+            except (subprocess.CalledProcessError, FileNotFoundError):
+                continue
+            if len(out) >= 6:
+                return "#" + out[:6]
+    return fallback
+
+
 def esc(s):
     return (s.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;"))
 
@@ -156,7 +187,7 @@ def bars(seed, n, lo, hi):
     return out
 
 
-def build_html(name, c, bt):
+def build_html(name, c, bt, folder):
     ground = c.get("background", "#101010")
     surface = c.get("lighter_background", ground)
     deep = c.get("dark_background", ground)
@@ -169,6 +200,8 @@ def build_html(name, c, bt):
 
     border = first_border_colour(c.get("hyprland_active_border"), accent)
     idle = first_border_colour(c.get("hyprland_inactive_border"), muted)
+
+
 
     kw = c.get("magenta", accent)
     st = c.get("green", accent)
@@ -320,10 +353,9 @@ body {{
 /* A folder rather than a rounded rectangle: the tab is what makes the shape
    legible at the size the theme menu renders this. */
 .fico {{ display:block; width:54px; height:42px; margin:0 auto 6px;
-         background:{accent}; opacity:.85; border-radius:0 5px 5px 5px;
-         position:relative; }}
+         background:{folder}; border-radius:0 5px 5px 5px; position:relative; }}
 .fico::before {{ content:""; position:absolute; left:0; top:-7px; width:24px;
-         height:9px; background:{accent}; border-radius:4px 4px 0 0; }}
+         height:9px; background:{folder}; border-radius:4px 4px 0 0; }}
 .crumb {{ color:{dim}; font-size:12px; margin-bottom:12px; }}
 </style></head><body>
 
@@ -403,7 +435,13 @@ def render(theme):
 
     c = read_colors(colors)
     bt = read_btop(d / "btop.theme")
-    html = build_html(theme.replace("-", " ").title(), c, bt)
+
+    icons = d / "icons.theme"
+    folder = folder_colour(
+        icons.read_text(encoding="utf-8").strip() if icons.exists() else "",
+        c.get("accent", "#888888"))
+
+    html = build_html(theme.replace("-", " ").title(), c, bt, folder)
 
     with tempfile.TemporaryDirectory() as tmp:
         page = Path(tmp) / "preview.html"
@@ -422,7 +460,7 @@ def render(theme):
                        check=True)
 
     size = (d / "preview.png").stat().st_size
-    print(f"  {theme}: preview.png {W}x{H}, {size} B")
+    print(f"  {theme}: preview.png {W}x{H}, {size} B, carpetas {folder}")
 
 
 if __name__ == "__main__":

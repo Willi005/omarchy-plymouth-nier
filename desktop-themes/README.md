@@ -55,13 +55,53 @@ theme menu as a theme of its own.
 `unlink` only removes a symlink that points into this package, and only removes
 the hook if it still matches the shipped one.
 
-## The theme-set hook
+## The file manager
 
-Flexoki Light Alt needs `dark-browser-chrome` in
-`~/.config/omarchy/hooks/theme-set.d/`, which keeps the browser dark under a
-light theme. It is copied rather than symlinked: Omarchy runs everything in
-that directory, and a dangling symlink there would error on every theme change
-once the package was gone.
+Stock Omarchy does not theme GTK apps from the palette. `omarchy-theme-set-gnome`
+sets exactly three things — `gtk-theme` to a hardcoded `Adwaita`/`Adwaita-dark`,
+`color-scheme` from the theme's `mode`, and `icon-theme` from its `icons.theme`,
+defaulting to `Yaru-blue`. So a file manager under any Omarchy theme is stock
+GNOME in light or dark, and the only colour the theme picks there is the folder.
+
+Both themes fix that in two steps.
+
+**`icons.theme` → `Yaru-wartybrown`.** Measured, not picked by name: the folder
+icon of every installed Yaru variant was sampled and scored against each
+theme's accent. Wartybrown's `#91765D` is closest for both — near-exact for
+Flexoki Light Alt's `#8E6944` — and `Yaru-blue`, which both themes had, comes
+last in both rankings. The stock `miasma` and `retro-82` use it too.
+
+**`gtk.css` → the palette.** libadwaita ignores `gtk-theme` entirely; overriding
+its named colours in `~/.config/gtk-4.0/gtk.css` is the supported route.
+`build-gtk.py` generates one per theme from `colors.toml`:
+
+```bash
+python3 build-gtk.py
+```
+
+Secondary text is chosen by a rule rather than by eye — the dimmest tone in the
+palette that still clears 4.5:1 on the window background. Nier Black's
+`dark_foreground` is 2.53:1 there, fine for a hairline and unusable for a
+filename, so it lands on `light_foreground` instead.
+
+Scope, plainly: this is GTK4/libadwaita — Nautilus and most current GNOME apps.
+GTK3 apps do not read these names and stay Adwaita. Apps read the stylesheet at
+startup, so reopen a window to see a change.
+
+## The theme-set hooks
+
+Two of them, in `~/.config/omarchy/hooks/theme-set.d/`:
+
+- `dark-browser-chrome` keeps the browser dark under Flexoki Light Alt.
+- `gtk-colors` installs the active theme's `gtk.css`, and **removes it for a
+  theme that ships none** — without that, one theme's colours would leak into
+  every theme chosen afterwards. It is keyed on the file, not on a theme name,
+  so any theme shipping a `gtk.css` gets this, ours or anyone else's. It never
+  touches a `gtk.css` it did not write.
+
+They are copied rather than symlinked: Omarchy runs everything in that
+directory, and a dangling symlink there would error on every theme change once
+the package was gone.
 
 ## The previews
 
