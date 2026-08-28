@@ -28,6 +28,7 @@ DEFAULTS = {
     # palette
     "BONE": "#CFC9B0", "DIM": "#4A4638", "CHROME": "#55503F",
     "RUST": "#B0563F", "GROUND": "#050505", "PROGRESS": "#CFC9B0",
+    "PROGRESS_HEIGHT": "2",
     # field
     "GLYPHS": "20", "STACKS": "6", "STACK_MIN": "2", "STACK_MAX": "6",
     "ALPHABET": "ｱｲｳｴｵｶｷｸｹｺｻｼｽｾｿﾀﾁﾂﾃﾄﾅﾆﾇﾈﾉﾊﾋﾌﾍﾎﾏﾐﾑﾒﾓﾔﾕﾖﾗﾘﾙﾚﾛﾜﾝ",
@@ -53,6 +54,12 @@ FRACTIONS = {
     "KEEPOUT": (0.0, 0.25, False),
 }
 FLAGS = ("FIELD", "MENU_HELP")
+# key -> (low, high). Whole numbers of pixels, measured on a 1800-tall screen
+# and scaled to the real panel like every other size in the theme. Clamped
+# rather than refused: an absurd thickness is ugly, not nonsense, and this
+# also runs from a pacman hook where dying would leave the boot image
+# unrebuilt mid-upgrade.
+PIXELS = {"PROGRESS_HEIGHT": (1, 64)}
 
 
 def _die(msg):
@@ -239,6 +246,15 @@ def load():
             f = min(high, max(low, f))
             print(f"warning: {key} clamped to {f}", file=sys.stderr)
         values[key] = str(f)
+
+    for key, (low, high) in PIXELS.items():
+        if not values[key].lstrip("-").isdigit():
+            _die(f"{key}={values[key]!r} must be a whole number of pixels")
+        n = int(values[key])
+        if not low <= n <= high:
+            n = min(high, max(low, n))
+            print(f"warning: {key} clamped to {n}", file=sys.stderr)
+        values[key] = str(n)
 
     for key in FLAGS:
         values[key] = values[key].strip().lower()

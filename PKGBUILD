@@ -6,7 +6,7 @@
 # repository to a handful of files and makes the geometry reproducible.
 
 pkgname=omarchy-plymouth-nier
-pkgver=1.7.0
+pkgver=1.7.1
 pkgrel=1
 pkgdesc="NieR-inspired theme for the Omarchy boot chain: Limine menu, LUKS unlock and shutdown screens"
 arch=('any')
@@ -42,6 +42,14 @@ _srcsub=
 _theme=omarchy-minimal
 
 build() {
+    # Start from nothing. build-theme.py deliberately skips any PNG that is
+    # already there, which makes iterating on the script fast and makes a
+    # reused $srcdir silently poisonous: 1.7.0 shipped a script that loads
+    # progress.png without shipping progress.png, because `makepkg -f` ran
+    # over the 1.6.0 build's theme/ and the new asset was never rendered.
+    # A fresh render costs about two seconds.
+    rm -rf "$srcdir/theme" "$srcdir/limine"
+
     # Renders every asset at its exact final pixel size for THIS machine's
     # panel: nothing antialiased is ever scaled at runtime, because Plymouth's
     # Image.Scale is a nearest-neighbour sampler and destroys artwork. The

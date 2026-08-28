@@ -87,6 +87,13 @@ SCALE = CONF.frac("SCALE")
 # Everything below is "pixels on a DESIGN_HEIGHT-tall screen" times RES.
 _S = SCALE * RES
 
+# The progress bar's thickness. Two pixels was fine on black, where the bar
+# reads as a bright edge; on a light ground a 2 px line at 0.75 opacity is
+# barely a tint, and what makes it legible is mass, not just colour. It scales
+# with the panel (RES) but NOT with SCALE: the bar is not part of the
+# composition, it is a readout along the bottom edge.
+PROGRESS_HEIGHT = max(1, round(int(CONF["PROGRESS_HEIGHT"]) * RES))
+
 AMBIENT_BOXES = tuple(round(b * _S) for b in (43, 56, 69))
 HIT_BOX = round(41 * _S)      # typed-character glitch glyph
 COLUMN_BOX = round(106 * _S)  # vertical column at the right
@@ -259,6 +266,13 @@ def build_script(d: Path):
         for axis, chan in zip("RGB", (r, g, b)):
             body = body.replace(f"@{name}_{axis}@", f"{chan:.3f}")
     body = body.replace("@MAX_ATT@", str(MAX_ATTEMPT_LABEL))
+    body = body.replace("@PROGRESS_H@", str(PROGRESS_HEIGHT))
+    # Box sizes the script used to read back off the artwork. They are known
+    # here, and taking them from the images meant every one of those images
+    # had to be loaded even on the shutdown path, which draws none of them.
+    body = body.replace("@COL_BOX@", str(COLUMN_BOX))
+    body = body.replace("@HIT_BOX@", str(HIT_BOX))
+    body = body.replace("@DOT_BOX@", str(DOT_BOX))
     (d / "omarchy.script").write_text(body)
     # A prebuilt package carries one machine's answers baked into PNGs: one
     # resolution, and one set of config values. On another panel, or against a
@@ -391,7 +405,14 @@ fun mod(a, b) {
 
 #----------------------------------------- Images ------------------------------
 
+# None of this is drawn on the way down. The farewell screen needs three
+# images; loading the other ~200 costs 17-26 ms cold, and all of it lands
+# inside the window where the compositor has already released the display and
+# Plymouth has not yet painted its first frame -- which is a black flash on
+# any palette whose ground is not black.
+if (global.shutdown == 0) {
 @IMAGES@
+}
 
 #----------------------------------------- Ambient glyphs ----------------------
 
@@ -503,17 +524,24 @@ global.amb_count = global.slot;
 
 #----------------------------------------- Ghost word --------------------------
 
-ghost.image = Image("ghost.png");
-ghost.sprite = Sprite(ghost.image);
-global.ghost_x = Math.Int(global.cx - ghost.image.GetWidth() / 2);
-global.ghost_y = Math.Int(global.cy - ghost.image.GetHeight() / 2);
-ghost.sprite.SetPosition(global.ghost_x, global.ghost_y, 5);
-ghost.sprite.SetOpacity(0);
+if (global.shutdown == 0) {
+  ghost.image = Image("ghost.png");
+  ghost.sprite = Sprite(ghost.image);
+  global.ghost_x = Math.Int(global.cx - ghost.image.GetWidth() / 2);
+  global.ghost_y = Math.Int(global.cy - ghost.image.GetHeight() / 2);
+  ghost.sprite.SetPosition(global.ghost_x, global.ghost_y, 5);
+  ghost.sprite.SetOpacity(0);
+}
 
 #----------------------------------------- Katakana column ---------------------
 
 global.column_count = @COLUMN@;
-global.col_box = column.image[0].GetHeight();
+if (global.shutdown == 1) global.column_count = 0;
+
+# A build-time constant, not column.image[0].GetHeight(): reading it back off
+# the artwork would force the column images to be loaded on the shutdown path
+# too, purely to measure something already known here.
+global.col_box = @COL_BOX@;
 column.step = Math.Int(global.col_box * 0.82);
 column.top = global.cy - (global.column_count - 1) * column.step / 2;
 
@@ -529,7 +557,17 @@ for (i = 0; i < global.column_count; i++) {
 
 #----------------------------------------- Welcome, line, hint -----------------
 
+# The one image both screens draw: the underline, the HUD brackets and the
+# farewell rule are all scaled from this flat tile.
 line.source = Image("line.png");
+
+global.line_width = Math.Int(global.W * @LINE_W@);
+global.line_y = Math.Int(global.cy + global.H * @LINE_DY@);
+global.line_x0 = Math.Int(global.cx - global.line_width / 2);
+
+# Everything from here to the HUD brackets is the unlock prompt, which the
+# farewell screen has no use for. Only the geometry above it is shared.
+if (global.shutdown == 0) {
 
 line.rust_source = Image("line_rust.png");
 line.progress_source = Image("progress.png");
@@ -541,10 +579,6 @@ global.welcome_y =
   Math.Int(global.cy - global.H * @WELCOME_DY@ - welcome.image.GetHeight() / 2);
 welcome.sprite.SetPosition(global.welcome_x, global.welcome_y, 10001);
 welcome.sprite.SetOpacity(0);
-
-global.line_width = Math.Int(global.W * @LINE_W@);
-global.line_y = Math.Int(global.cy + global.H * @LINE_DY@);
-global.line_x0 = Math.Int(global.cx - global.line_width / 2);
 
 # The underline is seven abutting pieces rather than one bar. Idle they tile
 # exactly (each piece runs to where the next one starts, so no seam) and read
@@ -590,6 +624,8 @@ hint.sprite.SetPosition(
   10001);
 hint.sprite.SetOpacity(0);
 
+}   # end of the boot-only prompt block
+
 #----------------------------------------- HUD brackets ------------------------
 
 global.br_w = Math.Int(global.W * @BR_W@);
@@ -632,9 +668,10 @@ global.bracket_count = 8;
 
 #----------------------------------------- Typed characters --------------------
 
-dot.square = Image("dot.png");
-global.dot_box = dot.square.GetWidth();
-global.hit_box = glyph.hit[0].GetWidth();
+if (global.shutdown == 0) dot.square = Image("dot.png");
+
+global.dot_box = @DOT_BOX@;
+global.hit_box = @HIT_BOX@;
 global.dot_spacing = Math.Int(global.H * @DOT_SPACING@);
 global.dot_y = Math.Int(global.line_y - global.H * @DOT_DY@);
 
@@ -650,6 +687,9 @@ shard.vx = [];
 shard.vy = [];
 shard.sprite = [];
 
+# The rejection visuals: shards, the ACCESS DENIED crossfade and the VERIFYING
+# label. A key is never rejected on the way down, because none is ever asked.
+if (global.shutdown == 0) {
 for (i = 0; i < global.max_bullets; i++) {
   shard.x[i] = 0;
   shard.y[i] = 0;
@@ -697,9 +737,15 @@ ver.sprite.SetPosition(
   Math.Int(global.cx - ver.image.GetWidth() / 2), global.status_y, 10001);
 ver.sprite.SetOpacity(0);
 
+}   # end of the boot-only rejection block
+
 #----------------------------------------- Farewell (shutdown) -----------------
 
 global.bye_alpha = 0;
+
+# ...and the mirror of that: the farewell exists only on the way down, so a
+# boot never pays for goodbye.png or offline.png either.
+if (global.shutdown == 1) {
 
 bye.image = Image("goodbye.png");
 bye.sprite = Sprite(bye.image);
@@ -722,10 +768,12 @@ off.sprite.SetPosition(
   10001);
 off.sprite.SetOpacity(0);
 
+}   # end of the shutdown-only farewell block
+
 #----------------------------------------- Progress ----------------------------
 
 progress.sprite = Sprite();
-progress.sprite.SetPosition(0, global.H - 2, 1);
+progress.sprite.SetPosition(0, global.H - @PROGRESS_H@, 1);
 progress.sprite.SetOpacity(0);
 
 message_sprite = Sprite();
@@ -952,7 +1000,7 @@ fun update_progress(value) {
     global.max_progress = value;
     width = Math.Int(global.W * value);
     if (width < 1) width = 1;
-    progress.sprite.SetImage(line.progress_source.Scale(width, 2));
+    progress.sprite.SetImage(line.progress_source.Scale(width, @PROGRESS_H@));
     progress.sprite.SetOpacity(0.75);
   }
 }
@@ -1110,6 +1158,12 @@ Plymouth.SetRefreshFunction(refresh_callback);
 #----------------------------------------- Callbacks ---------------------------
 
 fun display_normal_callback() {
+  # The shutdown screen has no password UI, and after the restructure its
+  # sprites are not even created, so touching them here would be a null
+  # dereference rather than a harmless no-op. Plymouth does call this on the
+  # way down.
+  if (global.shutdown == 1) return 0;
+
   # A submitted answer drops the entry and brings the display back to normal
   # while cryptsetup chews on it. That is the verifying beat — NOT an unlock:
   # a rejection looks identical from here and only announces itself later, by
@@ -1130,6 +1184,8 @@ fun display_normal_callback() {
 }
 
 fun display_password_callback(prompt, bullets) {
+  if (global.shutdown == 1) return 0;
+
   global.password_shown = 1;
 
   # Being asked again after a key was submitted is the only signal Plymouth

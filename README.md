@@ -128,6 +128,16 @@ and the Plymouth screens together.
 | `CHROME` | `#55503F` | secondary text: the hint, the menu's help rows |
 | `RUST` | `#B0563F` | the only chromatic note, and only on a rejected key |
 | `GROUND` | `#050505` | the surface everything sits on |
+| `PROGRESS` | `#CFC9B0` | the boot progress bar, and nothing else |
+| `PROGRESS_HEIGHT` | `2` | how thick that bar is, in px on an 1800-tall screen |
+
+`PROGRESS` is separate from `BONE` because the bar is the only element that
+sits on the very bottom edge of the panel, where a near-black band on a light
+ground looks like damage rather than progress. It is drawn at 0.75 opacity, so
+what you see is 75% of your colour over `GROUND` — `#9C8B5E` on Flexoki paper
+composites to `#B5A782`, a contrast of 2.3:1. On a light palette the bar also
+needs thickness: two pixels is a bright edge on black and a faint tint on
+paper, so the shipped light blocks raise `PROGRESS_HEIGHT` to 6.
 
 The config ships **four palette blocks** and you pick one by commenting the
 others: `BLACK` (active), `YORHA LIGHT`, `FLEXOKI LIGHT`, and an empty
@@ -140,7 +150,7 @@ The file is read top to bottom and the last assignment wins, so two
 uncommented blocks do not blend: the lower one silently takes over. Every
 generator warns and names both lines when a key is set twice.
 
-Preview any of them, or your own five, before rebuilding. Each screen has a
+Preview any of them, or your own, before rebuilding. Each screen has a
 browser simulator in `tools/` with a palette selector that prints the config
 block back to you — open `tools/preview-bootloader.html`,
 `tools/preview-arranque.html` or `tools/preview-apagado.html` directly, or

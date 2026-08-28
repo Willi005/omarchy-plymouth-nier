@@ -1,0 +1,52 @@
+# --- the farewell screen, and what it must NOT build ---------------------
+#
+# The shutdown splash appears in the window where the compositor has already
+# released the display and Plymouth has not yet painted a frame. Everything
+# the script does at load time happens inside that window, so building the
+# boot composition there is not merely wasted work: it is the length of a
+# black flash on any palette whose ground is not black.
+#
+# Counter names are deliberately odd (zz, wq) because a bare assignment
+# inside a theme function writes through to an existing global of the same
+# name, and refresh_callback assigns i, b and k.
+
+global.v_images = global.images_made;
+global.v_sprites = global.sprites_made;
+
+# Nothing from the boot composition may exist.
+zz = 0; for (wq = 0; amb.sprite[wq]; wq++) { zz++; }      global.amb_alive = zz;
+zz = 0; for (wq = 0; column.sprite[wq]; wq++) { zz++; }   global.column_alive = zz;
+zz = 0; for (wq = 0; seg.bone[wq]; wq++) { zz++; }        global.seg_alive = zz;
+zz = 0; for (wq = 0; shard.sprite[wq]; wq++) { zz++; }    global.shard_alive = zz;
+
+global.ghost_alive = 0;
+if (ghost.sprite) global.ghost_alive = 1;
+global.welcome_alive = 0;
+if (welcome.sprite) global.welcome_alive = 1;
+global.hint_alive = 0;
+if (hint.sprite) global.hint_alive = 1;
+
+# ...while the farewell itself must.
+global.bye_alive = 0;
+if (bye.sprite) global.bye_alive = 1;
+global.off_alive = 0;
+if (off.sprite) global.off_alive = 1;
+global.rule_alive = 0;
+if (bye.rule) global.rule_alive = 1;
+
+zz = 0; for (wq = 0; bracket.sprite[wq]; wq++) { zz++; }  global.bracket_alive = zz;
+
+# Plymouth calls display_normal on the way down. After the restructure the
+# password sprites do not exist, so this must not touch them.
+display_normal_callback();
+global.after_normal_state = global.state;
+
+# A stray progress tick must still draw nothing.
+progress_callback(1.0, 0.5);
+global.bar_on_shutdown = global.max_progress;
+
+# Run the fade in and check it lands where round 8 measured it.
+for (wq = 0; wq < 60; wq++) {
+  refresh_callback();
+}
+global.bye_alpha_60 = global.bye_alpha;

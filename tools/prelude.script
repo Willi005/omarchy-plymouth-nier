@@ -1,11 +1,13 @@
 # --- stubs so the real theme script can run without a display ---
 global.sprites_made = 0;
+global.images_made = 0;
 global.opacity_calls = 0;
 global.setimage_calls = 0;
 global.position_calls = 0;
 
 fun Image(name) {
   local.img;
+  global.images_made++;
   img.w = 300;
   img.h = 60;
   img.GetWidth = fun () { return this.w; };

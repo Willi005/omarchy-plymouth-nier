@@ -34,7 +34,11 @@ which must be zero at every density and every `KEEPOUT`. Placement happens at
 load, so no frames need to run.
 
 `verify.script` covers the rejected-key visuals; `verify-clock.script` covers
-the paused-progress detection that decides when a key was accepted.
+the paused-progress detection that decides when a key was accepted;
+`verify-shutdown.script` asserts what the farewell screen must NOT build, which
+is the whole boot composition — the prelude counts `Image()` calls, so a
+regression there shows up as a number rather than as a slower shutdown nobody
+notices.
 `@MODE@` is substituted with `boot`, `shutdown` or `reboot` to exercise
 `Plymouth.GetMode()`.
 

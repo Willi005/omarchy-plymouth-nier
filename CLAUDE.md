@@ -745,3 +745,145 @@ nothing can read it before the passphrase is typed. The fix is an
 
 It is a machine-local hook, not part of this package: deciding a user's screen
 brightness is not something a theme should do on their behalf.
+
+## The bar gets a thickness, and the shutdown flash gets a cause (1.7.1)
+
+Two reports, unrelated in the code: the light-palette progress bar was still
+hard to see even after 1.7.0 gave it its own colour, and a black flash of
+roughly one frame appears before the farewell animation on shutdown — invisible
+on the black palette, obvious on a light one.
+
+### PROGRESS_HEIGHT
+
+The colour key alone could not fix the first one. The bar is drawn at **0.75
+opacity**, so the value in the config is never the value on screen: it is 75%
+of it over `GROUND`. `#9C8B5E` on Flexoki paper composites to `#B5A782` — a
+contrast of **2.3:1**, which is invisible in a 2 px line no matter which khaki
+you pick. Solving for a 4:1 composite lands on `#60522E`, and the same solver
+run against the YoRHa ground moved that palette's bar from 2.4:1 to 4.0:1
+(`#6E6650` → `#403823`); it had the same defect and nobody had looked.
+
+But contrast was only half of it. Two pixels is a *bright edge* on black and a
+*tint* on paper: on a light ground legibility comes from mass. Hence
+`PROGRESS_HEIGHT`, in pixels on an 1800-tall screen, scaled by `RES` like every
+other size — but **not** by `SCALE`, because the bar is a readout along the
+bottom edge, not part of the composition. Clamped to 1..64. The black block
+keeps 2 (it was already right); both light blocks ship 6.
+
+The boot simulator now models both. It previously drew the bar in `BONE` at a
+hardcoded 2 px, so it had been lying about this element since 1.7.0.
+
+### The shutdown flash is the handoff, and the theme was making it longer
+
+Measured, from seven shutdowns in the journal, between `session-1.scope:
+Deactivated` and `Started Show Plymouth Power Off/Reboot Screen`:
+
+| boot | gap |
+|---|---|
+| -1 | 136 ms |
+| -2 | 93 ms |
+| -3 | 99 ms |
+| -5 | 57 ms |
+| -6 | 119 ms |
+| -7 | 113 ms |
+| -9, -10 | **none** — show-splash completed *before* the session died |
+
+That window is the flash: the compositor has released the display and Plymouth
+has not painted yet, so nothing is on screen. Those last two rows matter — it
+is a race, not a constant, and it is winnable.
+
+Ruled out along the way, so nobody re-checks them:
+
+- **The theme is not painting a black first frame.** `script_lib_draw_brackground`
+  in `script.so` compares the top and bottom background colours and takes
+  `ply_pixel_buffer_fill_with_hex_color` when they are equal (`cmp %ecx,%edx;
+  je` at 0x577c). The theme sets both to `GROUND`, so it is already on the
+  solid fast path, and the background is assigned at the top of the script,
+  before anything else.
+- **The first paint happens after the whole script has run**, so every
+  millisecond of load-time work sits inside the black window.
+
+What the theme owned was that load-time work. Timed with plymouth's *own*
+loader (`ply_image_new` + `ply_image_load` + `ply_image_convert_to_pixel_buffer`
+out of `libply-splash-graphics.so.5`, the same three calls `script_lib_image`
+makes), with the files evicted from the page cache first — which is the honest
+case, since at boot the theme comes from the initramfs copy and
+`/usr/share/plymouth/themes/` may not have been read at all this boot:
+
+```
+everything     205 files    17-26 ms      (ghost.png alone is 9.7 ms)
+shutdown set     3 files     ~1 ms
+parse                        6.5 ms warm, 45 ms cold
+```
+
+The farewell screen draws three images. It was loading two hundred and five.
+
+So the boot composition is now built only when `Plymouth.GetMode()` is not
+shutdown/reboot, and the farewell only when it is. Verified with the harness:
+`Image()` calls drop from **226 to 12** on the shutdown path (3 real loads plus
+9 `Image.Scale` stubs for the brackets and the rule), `bye_alpha` still lands
+at 0.911 after 60 frames, and all 36 asserted boot-path values are **identical**
+to the shipped 1.7.0 script — diffed, not eyeballed.
+
+This does not remove the flash. It removes the theme's share of it; the rest is
+plymouthd's own startup and the systemd race above, neither of which this
+package owns.
+
+### Two things the restructure needed first
+
+- **Blocks are not a scope barrier.** Round 7 established that a bare name
+  first assigned inside a *function* stays local to the call. Measured again
+  for `if` blocks, because the whole change depends on it: an assignment inside
+  a top-level `if` **does** reach the global hash, and reading a hash whose
+  branch never ran is falsy rather than fatal. Functions are the only barrier.
+- **`display_normal_callback` had to learn about shutdown.** Plymouth calls it
+  on the way down. It used to touch password sprites that existed-but-hidden;
+  now they are not created at all, so it would have been a null dereference.
+  Both display callbacks return early when shutting down.
+
+Two `GetWidth()/GetHeight()` reads (`glyph.hit[0]`, `column.image[0]`) became
+build-time constants, since measuring an image is a poor reason to load it.
+
+New suite: `tools/verify-shutdown.script`, plus an `images_made` counter in the
+prelude — the regression this guards against is silent, and only shows up as a
+number.
+
+### And a defect in 1.7.0 that this release also fixes
+
+Installing 1.7.1 failed with a file conflict: `progress.png` existed on disk
+but no package owned it. Chasing that turned up something worse — **the
+published 1.7.0 package ships a script that calls `Image("progress.png")` and
+does not contain `progress.png`.** Counted straight out of the tarballs:
+
+```
+1.6.0 : 204 PNG    1.7.0 : 204 PNG    1.7.1 : 205 PNG
+```
+
+`build-theme.py` skips any PNG that is already present, which is what makes
+iterating on the script fast. `makepkg -f` reuses `$srcdir`, so the 1.7.0 build
+ran over the 1.6.0 build's `theme/` and simply never rendered the new asset.
+The file only exists on this machine because `omarchy-nier-reconfigure` ran
+afterwards and regenerated the directory outside pacman's ownership.
+
+For anyone installing 1.7.0 cleanly, `Image()` on a missing file yields null,
+so the progress bar never appears at all — and the fingerprint could not catch
+it, because the config and the panel both matched what the package was built
+for. The staleness was in the *build*, not in the target.
+
+`build()` now starts with `rm -rf "$srcdir/theme" "$srcdir/limine"`. Two extra
+seconds per build.
+
+Worth running before publishing anything, since it is the check that would have
+caught this:
+
+```bash
+tar -xOf PKG usr/share/plymouth/themes/omarchy-minimal/omarchy.script \
+  | grep -oE 'Image\("[^"]+"\)' | sed 's/Image("//;s/")//' | sort -u > want
+tar -tf PKG | grep 'themes/omarchy-minimal/.*\.png' | xargs -n1 basename \
+  | sort -u > have
+comm -23 want have          # must be empty
+```
+
+Upgrading over an affected install needs
+`--overwrite /usr/share/plymouth/themes/omarchy-minimal/progress.png` once,
+because the reconfigure-generated copy is unowned.
