@@ -18,7 +18,8 @@ optdepends=('python: required by omarchy-nier-reconfigure, and lets an upgrade
             'imagemagick: required by omarchy-nier-reconfigure'
             'fontconfig: required by omarchy-nier-reconfigure'
             'noto-fonts-cjk: the katakana and the background word'
-            'ttf-jetbrains-mono-nerd: every line of Latin text in the theme')
+            'ttf-jetbrains-mono-nerd: every line of Latin text in the theme'
+            'omarchy-nier-themes: the same palette applied to the desktop')
 backup=('etc/omarchy-plymouth-nier.conf')
 makedepends=('python' 'imagemagick' 'fontconfig' 'noto-fonts-cjk'
              'ttf-jetbrains-mono-nerd')
