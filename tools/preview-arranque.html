@@ -11,6 +11,12 @@
     --chrome: #55503F;
     --chrome-hi: #8C8770;
     --rust: #B0563F;
+    /* Page chrome, derived from the two ends of the palette so the strip
+       around the screen follows whichever palette is being previewed. */
+    --panel: #0B0B0A;
+    --line: #151513;
+    --field: #050505;
+    --border: #1D1C1A;
     --mono: "JetBrains Mono", ui-monospace, "SFMono-Regular", Menlo, monospace;
   }
 
@@ -24,13 +30,17 @@
     height: 100vh;
     display: flex;
     flex-direction: column;
-    overflow: hidden;
+    overflow-y: auto;
   }
 
+  /* The screen needs a floor. It is the only element here that can shrink,
+     so on a short panel flex:1 handed all of its height to the controls and
+     the canvas collapsed to nothing. Below this height the page scrolls
+     instead. */
   #screen {
     flex: 1;
     position: relative;
-    min-height: 0;
+    min-height: 52vh;
     cursor: text;
   }
 
@@ -43,8 +53,8 @@
     align-items: center;
     gap: 1.1rem 1.6rem;
     padding: 0.85rem 1.25rem;
-    border-top: 1px solid #14130F;
-    background: #0A0A08;
+    border-top: 1px solid var(--line);
+    background: var(--panel);
     font-size: 0.7rem;
     letter-spacing: 0.12em;
   }
@@ -60,8 +70,8 @@
   }
 
   input[type="text"], select {
-    background: #050505;
-    border: 1px solid #221F18;
+    background: var(--field);
+    border: 1px solid var(--border);
     color: var(--bone);
     font-family: var(--mono);
     font-size: 0.72rem;
@@ -81,7 +91,7 @@
 
   button {
     background: transparent;
-    border: 1px solid #2A2720;
+    border: 1px solid var(--border);
     color: var(--chrome-hi);
     font-family: var(--mono);
     font-size: 0.62rem;
@@ -97,7 +107,7 @@
     display: inline-block;
     width: 0.62rem;
     height: 0.62rem;
-    border: 1px solid #221F18;
+    border: 1px solid var(--border);
     vertical-align: -1px;
   }
 
@@ -114,6 +124,59 @@
   }
 
   #readout.bad { color: var(--rust); }
+
+  /* The palette row spans the strip's full width, so the five keys read as
+     one set rather than as five more controls competing with the rest. */
+  #palrow {
+    flex-basis: 100%;
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.5rem 1.15rem;
+    padding-top: 0.7rem;
+    border-top: 1px solid var(--line);
+  }
+
+  .key {
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+    font-size: 0.6rem;
+    letter-spacing: 0.16em;
+    color: var(--chrome);
+    text-transform: uppercase;
+  }
+
+  .key b {
+    color: var(--chrome-hi);
+    font-weight: 400;
+    font-variant-numeric: tabular-nums;
+    letter-spacing: 0.1em;
+  }
+
+  .key input[type="color"] {
+    inline-size: 1.15rem;
+    block-size: 1.15rem;
+    padding: 0;
+    border: 1px solid var(--border);
+    background: none;
+    cursor: pointer;
+  }
+
+  .key input[type="color"]:disabled { cursor: default; opacity: 1; }
+  .key input[type="color"]::-moz-color-swatch { border: none; }
+  .key input[type="color"]::-webkit-color-swatch { border: none; }
+  .key input[type="color"]::-webkit-color-swatch-wrapper { padding: 0; }
+
+  #confout {
+    margin-left: auto;
+    color: var(--chrome);
+    font-size: 0.6rem;
+    letter-spacing: 0.08em;
+    white-space: nowrap;
+    overflow-x: auto;
+    user-select: all;
+  }
 </style>
 
 <div id="screen">
@@ -155,8 +218,18 @@
   <div class="ctl">
     <label class="toggle"><input id="brackets" type="checkbox" checked> HUD marks</label>
   </div>
+  <div class="ctl">
+    <label for="palette">Palette</label>
+    <select id="palette">
+      <option value="dark" selected>Dark — bone on black</option>
+      <option value="light">Light — YoRHa menu</option>
+      <option value="flexoki">Light — Flexoki</option>
+      <option value="custom">Custom</option>
+    </select>
+  </div>
   <button id="reset">Reset</button>
   <span id="readout">idle</span>
+  <div id="palrow"></div>
 </div>
 
 <script>
@@ -164,10 +237,108 @@
   const KATAKANA = "ｱｲｳｴｵｶｷｸｹｺｻｼｽｾｿﾀﾁﾂﾃﾄﾅﾆﾇﾈﾉﾊﾋﾌﾍﾎﾏﾐﾑﾒﾓﾔﾕﾖﾗﾘﾙﾚﾛﾜﾝ".split("");
   const COLUMN = "ｼｽﾃﾑ"; // shisutemu — "system"
   const HINT = "TYPE A PASSWORD  ·  ENTER TO UNLOCK";
-  const BONE = [207, 201, 176];
-  const DIM  = [74, 70, 56];
-  const CHROME = [85, 80, 63];
-  const RUST = [176, 86, 63];   // the only chromatic note, and only on failure
+  // ---- palette ------------------------------------------------------
+  // These five keys are exactly the ones in /etc/omarchy-plymouth-nier.conf,
+  // so whatever this row shows can be pasted straight into the config.
+  //
+  // Dark is what ships today. Light is the YoRHa menu palette from the game,
+  // with the ink deepened a little: the exact screenshot values put the
+  // greeting at contrast 5.03, and a passphrase prompt read at 3am deserves
+  // more headroom than that. CHROME, DIM and RUST are not eyeballed -- they
+  // were solved for the same contrast ratio against GROUND that each already
+  // holds in the dark set (2.53, 2.16 and 4.12), keeping the warm hue, so the
+  // composition reads identically in both.
+  const PALETTES = {
+    dark:  { BONE: "#CFC9B0", DIM: "#4A4638", CHROME: "#55503F",
+             RUST: "#B0563F", GROUND: "#050505" },
+    light: { BONE: "#3B382F", DIM: "#8F876C", CHROME: "#847C62",
+             RUST: "#9D3B23", GROUND: "#CFC9B4" },
+    // Flexoki Light, using the scheme's own tokens: paper for GROUND, tx for
+    // BONE, tx-3 for DIM. CHROME is base-500 rather than tx-2, and RUST is
+    // red-400 rather than red-600 -- at their contrast against paper (4.97 and
+    // 6.23) those two read as primary text and as a shout, which is not the
+    // job either of them has here. Still a much crisper set than the YoRHa
+    // one: BONE lands at 18.6:1 against 12.3:1 in the dark theme.
+    flexoki: { BONE: "#100F0F", DIM: "#B7B5AC", CHROME: "#878580",
+               RUST: "#D14D41", GROUND: "#FFFCF0" },
+  };
+  const KEYS = ["BONE", "DIM", "CHROME", "RUST", "GROUND"];
+  const custom = { ...PALETTES.light };
+
+  const hexToRgb = h => [1, 3, 5].map(i => parseInt(h.slice(i, i + 2), 16));
+  const toHex = c => "#" + c.map(v =>
+    Math.max(0, Math.min(255, Math.round(v))).toString(16)
+      .padStart(2, "0")).join("").toUpperCase();
+  const blend = (a, b, k) => a.map((v, i) => v + (b[i] - v) * k);
+
+  let BONE, DIM, CHROME, RUST, GROUND, GROUND_HEX;
+  let paletteName = "dark";
+
+  const palRow = document.getElementById("palrow");
+  const swatchInputs = {};
+
+  for (const key of KEYS) {
+    const label = document.createElement("label");
+    label.className = "key";
+    const input = document.createElement("input");
+    input.type = "color";
+    input.disabled = true;
+    input.setAttribute("aria-label", key);
+    input.addEventListener("input", () => {
+      custom[key] = input.value.toUpperCase();
+      applyPalette("custom");
+    });
+    const name = document.createElement("span");
+    name.textContent = key;
+    const value = document.createElement("b");
+    label.append(input, name, value);
+    palRow.append(label);
+    swatchInputs[key] = { input, value };
+  }
+
+  const confOut = document.createElement("code");
+  confOut.id = "confout";
+  palRow.append(confOut);
+
+  function applyPalette(name) {
+    paletteName = name;
+    const p = name === "custom" ? custom : PALETTES[name];
+
+    BONE = hexToRgb(p.BONE);
+    DIM = hexToRgb(p.DIM);
+    CHROME = hexToRgb(p.CHROME);
+    RUST = hexToRgb(p.RUST);
+    GROUND = hexToRgb(p.GROUND);
+    GROUND_HEX = p.GROUND;
+
+    // The strip around the screen follows the simulated palette, so a light
+    // boot screen is not framed in a dark shell. Every step is a blend from
+    // GROUND toward BONE, which moves away from the background whichever of
+    // the two happens to be darker -- the same reason the real chrome_hi has
+    // to stop multiplying channels and start blending.
+    const step = k => toHex(blend(GROUND, BONE, k));
+    const root = document.documentElement.style;
+    root.setProperty("--ground", p.GROUND);
+    root.setProperty("--bone", p.BONE);
+    root.setProperty("--bone-dim", p.DIM);
+    root.setProperty("--chrome", p.CHROME);
+    root.setProperty("--chrome-hi", toHex(blend(CHROME, BONE, 0.42)));
+    root.setProperty("--rust", p.RUST);
+    root.setProperty("--panel", step(0.03));
+    root.setProperty("--line", step(0.08));
+    root.setProperty("--field", p.GROUND);
+    root.setProperty("--border", step(0.12));
+
+    for (const key of KEYS) {
+      const s = swatchInputs[key];
+      s.input.value = p[key].toLowerCase();
+      s.input.disabled = name !== "custom";
+      s.value.textContent = p[key];
+    }
+    confOut.textContent = KEYS.map(k => `${k}=${p[k]}`).join("  ");
+  }
+
+  applyPalette("dark");
 
   const canvas = document.getElementById("c");
   const ctx = canvas.getContext("2d");
@@ -567,7 +738,7 @@
     for (const b of bands) {
       const by = b.y * H, bh = b.h * H;
       const dx = b.dx * W * 0.030 * k;
-      ctx.fillStyle = "#050505";
+      ctx.fillStyle = GROUND_HEX;
       ctx.fillRect(0, by, W, bh);
       ctx.drawImage(off, 0, by * dpr, off.width, bh * dpr, dx, by, W, bh);
     }
@@ -585,7 +756,7 @@
       shards = [];
     }
 
-    ctx.fillStyle = "#050505";
+    ctx.fillStyle = GROUND_HEX;
     ctx.fillRect(0, 0, W, H);
 
     let ui = 1, fieldDim = 1, decay = 0;
@@ -664,6 +835,10 @@
   });
 
   document.getElementById("reset").addEventListener("click", reset);
+
+  document.getElementById("palette").addEventListener("change", e => {
+    applyPalette(e.target.value);
+  });
 
   densityInput.addEventListener("input", () => {
     densityVal.textContent = densityInput.value;

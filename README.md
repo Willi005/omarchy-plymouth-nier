@@ -127,7 +127,28 @@ and the Plymouth screens together.
 | `DIM` | `#4A4638` | the ghost word, and nothing else |
 | `CHROME` | `#55503F` | secondary text: the hint, the menu's help rows |
 | `RUST` | `#B0563F` | the only chromatic note, and only on a rejected key |
-| `GROUND` | `#050505` | the near-black behind everything |
+| `GROUND` | `#050505` | the surface everything sits on |
+
+The config ships **four palette blocks** and you pick one by commenting the
+others: `BLACK` (active), `YORHA LIGHT`, `FLEXOKI LIGHT`, and an empty
+`CUSTOM`. The two light sets are not inversions — `CHROME`, `DIM` and `RUST`
+were solved to hold the same contrast ratio against `GROUND` that each already
+holds in the black set, so the composition reads the same and only the ground
+and the ink change.
+
+The file is read top to bottom and the last assignment wins, so two
+uncommented blocks do not blend: the lower one silently takes over. Every
+generator warns and names both lines when a key is set twice.
+
+Preview any of them, or your own five, before rebuilding. Each screen has a
+browser simulator in `tools/` with a palette selector that prints the config
+block back to you — open `tools/preview-bootloader.html`,
+`tools/preview-arranque.html` or `tools/preview-apagado.html` directly, or
+serve the directory if your browser blocks local fonts:
+
+```sh
+python3 -m http.server -d tools 8731    # then http://localhost:8731/
+```
 
 **The ambient field**
 

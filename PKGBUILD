@@ -6,7 +6,7 @@
 # repository to a handful of files and makes the geometry reproducible.
 
 pkgname=omarchy-plymouth-nier
-pkgver=1.5.1
+pkgver=1.6.0
 pkgrel=1
 pkgdesc="NieR-inspired theme for the Omarchy boot chain: Limine menu, LUKS unlock and shutdown screens"
 arch=('any')

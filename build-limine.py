@@ -145,10 +145,16 @@ def main():
 
     width, height = CONF.resolution
 
-    # A brighter step of the secondary colour, for the countdown digit and the
-    # entry comment. Derived rather than configured: it only ever needs to
-    # read as "the same colour, one notch up".
-    chrome_hi = "".join(f"{min(255, round(c * 1.65)):02X}" for c in rgb("CHROME"))
+    # One step further from the ground than CHROME, for the countdown digit
+    # and the entry comment. Derived rather than configured: it only ever
+    # needs to read as "the same colour, one notch up".
+    #
+    # This used to multiply each channel by 1.65, which is only "up" when the
+    # ground is the darker end. On a light palette it walks towards the paper
+    # instead: with Flexoki the digit came out at 1.3:1 against its own
+    # background. Blending towards BONE is correct whichever end is darker,
+    # and on the black palette it lands within a shade of the old value.
+    chrome_hi = "".join(f"{c:02X}" for c in blend(BONE, rgb("CHROME"), 0.42))
 
     inset, arm, thick = wallpaper(width, height, out / "bg.png")
     (out / "limine-block.conf").write_text(BLOCK.format(

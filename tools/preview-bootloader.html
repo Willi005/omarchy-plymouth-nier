@@ -7,13 +7,14 @@
   :root {
     --ground:#050505; --bone:#CFC9B0; --dim:#4A4638; --chrome:#55503F;
     --chrome-hi:#8C8770; --rust:#B0563F; --panel:#0A0A08; --line:#16150F;
+    --press:#131310;
     --mono:"JetBrains Mono",ui-monospace,SFMono-Regular,Menlo,monospace;
   }
   * { box-sizing:border-box; }
   html,body { height:100%; }
   body {
     margin:0; background:var(--ground); color:var(--bone);
-    font-family:var(--mono); display:flex; flex-direction:column; overflow:hidden;
+    font-family:var(--mono); display:flex; flex-direction:column; overflow-y:auto;
   }
 
   /* la muestra tipografica existe para que el navegador cargue las dos familias:
@@ -24,7 +25,10 @@
   }
   #warm i { font-family:"Noto Sans JP",sans-serif; font-style:normal; }
 
-  #screen { flex:1; min-height:0; position:relative; background:#000; }
+  /* La pantalla necesita un suelo. Es lo unico que puede encogerse aqui, asi
+     que en una ventana baja flex:1 le cedia todo el alto a los controles y el
+     lienzo se quedaba en nada. Por debajo de este alto la pagina se desplaza. */
+  #screen { flex:1; min-height:46vh; position:relative; background:#000; }
   canvas { display:block; width:100%; height:100%; }
 
   #hud {
@@ -53,18 +57,56 @@
     transition:border-color .15s, color .15s, background .15s;
   }
   button:hover { border-color:var(--chrome); color:var(--bone); }
-  button[aria-pressed="true"] { border-color:var(--bone); color:var(--bone); background:#13120D; }
+  button[aria-pressed="true"] { border-color:var(--bone); color:var(--bone); background:var(--press); }
   button:focus-visible { outline:1px solid var(--rust); outline-offset:2px; }
 
   #notes {
     background:var(--panel); border-top:1px solid var(--line);
     padding:.7rem 1.05rem .95rem; color:var(--chrome);
-    font-size:.66rem; line-height:1.75; overflow-y:auto; max-height:8.5rem;
+    font-size:.66rem; line-height:1.75; overflow-y:auto; max-height:min(8.5rem, 20vh);
   }
   #notes p { margin:0 0 .3rem; }
   #notes b { color:var(--bone); font-weight:400; }
   #notes code { color:var(--chrome-hi); }
   #notes .tag { color:var(--rust); letter-spacing:.18em; text-transform:uppercase; font-size:.56rem; }
+
+  select {
+    font:inherit; font-size:.62rem; letter-spacing:.13em;
+    background:var(--ground); color:var(--bone); border:1px solid var(--line);
+    padding:.26rem .5rem; cursor:pointer;
+  }
+  select:focus-visible { outline:1px solid var(--rust); outline-offset:2px; }
+
+  /* la fila de paleta ocupa el ancho completo: las cinco claves son un
+     conjunto, no cinco controles mas compitiendo con el resto */
+  #palrow {
+    flex-basis:100%; display:flex; flex-wrap:wrap; align-items:center;
+    gap:.45rem 1.1rem; padding-top:.65rem; border-top:1px solid var(--line);
+  }
+  .key {
+    display:flex; align-items:center; gap:.38rem; font-size:.56rem;
+    letter-spacing:.16em; color:var(--chrome); text-transform:uppercase;
+  }
+  .key b {
+    color:var(--chrome-hi); font-weight:400; letter-spacing:.1em;
+    font-variant-numeric:tabular-nums;
+  }
+  .key input[type="color"] {
+    inline-size:1.1rem; block-size:1.1rem; padding:0; background:none;
+    border:1px solid var(--line); cursor:pointer;
+  }
+  .key input[type="color"]:disabled { cursor:default; opacity:1; }
+  .key input[type="color"]::-moz-color-swatch { border:none; }
+  .key input[type="color"]::-webkit-color-swatch { border:none; }
+  .key input[type="color"]::-webkit-color-swatch-wrapper { padding:0; }
+  #confout {
+    margin-left:auto; color:var(--chrome); font-size:.56rem; letter-spacing:.08em;
+    white-space:nowrap; overflow-x:auto; user-select:all;
+  }
+  #notes .chip {
+    display:inline-block; padding:0 .35rem; border:1px solid var(--line);
+    font-variant-numeric:tabular-nums;
+  }
 </style>
 
 <div id="warm">JetBrains Mono 0123 <i>システム ｱｲｳ</i></div>
@@ -87,6 +129,15 @@
     <button data-r="1366x768">1366×768</button>
   </div>
   <div class="ctl"><span>Siembra</span><button id="seed">otra</button></div>
+  <div class="ctl">
+    <span><label for="palette">Paleta</label></span>
+    <select id="palette">
+      <option value="dark" selected>oscura · hueso sobre negro</option>
+      <option value="light">clara · menú YoRHa</option>
+      <option value="flexoki">clara · Flexoki</option>
+      <option value="custom">propia</option>
+    </select>
+  </div>
   <div class="ctl"><span>Render</span>
     <button data-b="1">bitmap 8×16</button><button data-b="0">suave</button>
   </div>
@@ -99,6 +150,7 @@
   <div class="ctl"><span>Margen</span>
     <button data-m="0.036">estrecho</button><button data-m="0.105">ancho</button>
   </div>
+  <div id="palrow"></div>
 </div>
 
 <div id="notes">
@@ -116,6 +168,15 @@
   con OVMF y se compara con la captura real. De ahí salieron la segunda fila de ayuda
   (<code>S Firmware Setup</code>) y el <code>comment:</code> dibujado al pie en vez de junto a la
   entrada.</p>
+  <p><span class="tag">Corregido</span> El dígito de la cuenta atrás y el
+  <code>comment:</code> usan <code>chrome_hi</code>, un escalón más marcado de
+  <code>CHROME</code>. Hasta ahora se derivaba <b>multiplicando cada canal por
+  1.65</b> (<code>build-limine.py</code>), que sobre fondo oscuro lo aleja del
+  fondo y sobre fondo claro lo acerca: en la paleta clara el dígito casi
+  desaparece. Ahora se obtiene <b>mezclando <code>CHROME</code> hacia
+  <code>BONE</code></b>, que se aleja del fondo sea cual sea el más oscuro de
+  los dos. Con la paleta activa: <span id="hiOld" class="chip"></span> frente a
+  <span id="hiNew" class="chip"></span>.</p>
   <p><span class="tag">Ojo</span> La <b>resolución del menú no es la del panel</b>: sin
   <code>interface_resolution</code>, Limine elige un modo GOP por su cuenta, y no se puede leer
   desde un sistema arrancado. Por eso el tema no pone <code>term_font_scale</code> ni
@@ -130,8 +191,122 @@
   const ctx = cv.getContext('2d', { alpha: false });
   const hudL = document.getElementById('hudL');
 
-  const GROUND = '#050505', BONE = '#CFC9B0', DIM = '#4A4638';
-  const CHROME = '#55503F', CHROME_HI = '#8C8770';
+  // ---- paleta ---------------------------------------------------------
+  // Las mismas cinco claves de /etc/omarchy-plymouth-nier.conf. La clara sale
+  // del menú YoRHa del juego, con la tinta algo más profunda; CHROME, DIM y
+  // RUST no están a ojo: se resolvieron para conservar contra GROUND el mismo
+  // ratio de contraste que ya tienen en la oscura.
+  const PALETTES = {
+    dark:  { BONE:'#CFC9B0', DIM:'#4A4638', CHROME:'#55503F',
+             RUST:'#B0563F', GROUND:'#050505' },
+    light: { BONE:'#3B382F', DIM:'#8F876C', CHROME:'#847C62',
+             RUST:'#9D3B23', GROUND:'#CFC9B4' },
+    // Flexoki Light con sus propios tokens: paper para GROUND, tx para BONE,
+    // tx-3 para DIM. CHROME es base-500 y no tx-2, y RUST es red-400 y no
+    // red-600: con su contraste contra el papel (4.97 y 6.23) esos dos leen
+    // como texto principal y como un grito, que no es el papel de ninguno.
+    flexoki: { BONE:'#100F0F', DIM:'#B7B5AC', CHROME:'#878580',
+               RUST:'#D14D41', GROUND:'#FFFCF0' },
+  };
+  const KEYS = ['BONE', 'DIM', 'CHROME', 'RUST', 'GROUND'];
+  const custom = { ...PALETTES.light };
+
+  const hexToRgb = h => [1, 3, 5].map(i => parseInt(h.slice(i, i + 2), 16));
+  const toHex = c => '#' + c.map(v =>
+    Math.max(0, Math.min(255, Math.round(v))).toString(16)
+      .padStart(2, '0')).join('').toUpperCase();
+  const blend = (a, b, k) => a.map((v, i) => v + (b[i] - v) * k);
+  const relLum = c => {
+    const f = v => (v /= 255) <= 0.04045 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4;
+    return 0.2126 * f(c[0]) + 0.7152 * f(c[1]) + 0.0722 * f(c[2]);
+  };
+  const contrast = (a, b) => {
+    const [hi, lo] = [relLum(a), relLum(b)].sort((x, y) => y - x);
+    return (hi + 0.05) / (lo + 0.05);
+  };
+
+  let GROUND, BONE, DIM, CHROME, RUST, CHROME_HI;
+
+  const palRow = document.getElementById('palrow');
+  const swatches = {};
+
+  for (const key of KEYS) {
+    const label = document.createElement('label');
+    label.className = 'key';
+    const input = document.createElement('input');
+    input.type = 'color';
+    input.disabled = true;
+    input.setAttribute('aria-label', key);
+    input.addEventListener('input', () => {
+      custom[key] = input.value.toUpperCase();
+      applyPalette('custom');
+    });
+    const nameEl = document.createElement('span');
+    nameEl.textContent = key;
+    const valueEl = document.createElement('b');
+    label.append(input, nameEl, valueEl);
+    palRow.append(label);
+    swatches[key] = { input, value: valueEl };
+  }
+
+  const confOut = document.createElement('code');
+  confOut.id = 'confout';
+  palRow.append(confOut);
+
+  const hiOld = document.getElementById('hiOld');
+  const hiNew = document.getElementById('hiNew');
+
+  function applyPalette(name, redraw = true) {
+    const pal = name === 'custom' ? custom : PALETTES[name];
+    GROUND = pal.GROUND; BONE = pal.BONE; DIM = pal.DIM;
+    CHROME = pal.CHROME; RUST = pal.RUST;
+
+    const chrome = hexToRgb(pal.CHROME);
+    const bone = hexToRgb(pal.BONE);
+    const ground = hexToRgb(pal.GROUND);
+
+    // El escalón correcto es una mezcla hacia BONE: se aleja del fondo tanto
+    // si el fondo es el negro como si es el papel. Multiplicar canales solo
+    // sabe aclarar, y sobre papel aclarar es acercarse.
+    const stepUp = blend(chrome, bone, 0.42);
+    const stepOld = chrome.map(c => Math.min(255, c * 1.65));
+    CHROME_HI = toHex(stepUp);
+
+    if (hiOld && hiNew) {
+      hiOld.textContent = `×1.65 ${toHex(stepOld)} · ${contrast(stepOld, ground).toFixed(2)}:1`;
+      hiOld.style.color = toHex(stepOld);
+      hiNew.textContent = `mezcla ${CHROME_HI} · ${contrast(stepUp, ground).toFixed(2)}:1`;
+      hiNew.style.color = CHROME_HI;
+    }
+
+    const step = k => toHex(blend(ground, bone, k));
+    const root = document.documentElement.style;
+    root.setProperty('--ground', pal.GROUND);
+    root.setProperty('--bone', pal.BONE);
+    root.setProperty('--dim', pal.DIM);
+    root.setProperty('--chrome', pal.CHROME);
+    root.setProperty('--chrome-hi', CHROME_HI);
+    root.setProperty('--rust', pal.RUST);
+    root.setProperty('--panel', step(0.03));
+    root.setProperty('--line', step(0.09));
+    root.setProperty('--press', step(0.06));
+
+    for (const key of KEYS) {
+      const sw = swatches[key];
+      sw.input.value = pal[key].toLowerCase();
+      sw.input.disabled = name !== 'custom';
+      sw.value.textContent = pal[key];
+    }
+    confOut.textContent = KEYS.map(k => `${k}=${pal[k]}`).join('  ');
+
+    if (redraw) draw();
+  }
+
+  applyPalette('dark', false);
+
+  document.getElementById('palette').addEventListener('change', e => {
+    applyPalette(e.target.value);
+  });
   const KATA = 'ｱｲｳｴｵｶｷｸｹｺｻｼｽｾｿﾀﾁﾂﾃﾄﾅﾆﾇﾈﾉﾊﾋﾌﾍﾎﾏﾐﾑﾒﾓﾔﾕﾖﾗﾘﾙﾚﾛﾜﾝ';
   const COLUMN = 'ｼｽﾃﾑ';
   const JP = '"Noto Sans JP","Noto Sans CJK JP",sans-serif';

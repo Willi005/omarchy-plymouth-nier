@@ -63,6 +63,7 @@ BONE = CONF["BONE"]       # everything the eye should read
 DIM = CONF["DIM"]         # ghost word only
 CHROME = CONF["CHROME"]   # bottom hint, secondary labels
 RUST = CONF["RUST"]       # the only chromatic note, and only on a rejected key
+GROUND = CONF["GROUND"]   # the window itself, and the console log behind it
 
 KATA = CONF["ALPHABET"]
 COLUMN_CHARS = CONF.column      # derived from GHOST_WORD unless set explicitly
@@ -247,9 +248,10 @@ def build_script(d: Path):
                         str(CONF.count("STACK_MAX") - CONF.count("STACK_MIN") + 1))
     # Plymouth cannot read a colour from anywhere but a literal, and this is
     # the one place a colour is not baked into a PNG.
-    r, g, b = (int(BONE[i:i + 2], 16) / 255 for i in (1, 3, 5))
-    body = body.replace("@BONE_R@", f"{r:.3f}").replace("@BONE_G@", f"{g:.3f}")
-    body = body.replace("@BONE_B@", f"{b:.3f}")
+    for name, value in (("BONE", BONE), ("GROUND", GROUND)):
+        r, g, b = (int(value[i:i + 2], 16) / 255 for i in (1, 3, 5))
+        for axis, chan in zip("RGB", (r, g, b)):
+            body = body.replace(f"@{name}_{axis}@", f"{chan:.3f}")
     body = body.replace("@MAX_ATT@", str(MAX_ATTEMPT_LABEL))
     (d / "omarchy.script").write_text(body)
     # A prebuilt package carries one machine's answers baked into PNGs: one
@@ -279,8 +281,12 @@ SCRIPT = r'''# Omarchy Minimal — NieR-inspired LUKS unlock screen.
 #   5. typed characters: a katakana that cycles briefly, then resolves
 #   6. after unlock everything fades out and only the progress line remains
 
-Window.SetBackgroundTopColor(0.020, 0.020, 0.020);
-Window.SetBackgroundBottomColor(0.020, 0.020, 0.020);
+# The ground is the one surface Plymouth paints itself rather than reading
+# from a PNG, so it has to come from GROUND like everything else. It was a
+# literal here for six rounds, which was invisible while the theme was only
+# ever dark and fatal the moment it was not: dark ink on a black window.
+Window.SetBackgroundTopColor(@GROUND_R@, @GROUND_G@, @GROUND_B@);
+Window.SetBackgroundBottomColor(@GROUND_R@, @GROUND_G@, @GROUND_B@);
 
 global.W = Window.GetWidth();
 global.H = Window.GetHeight();
@@ -1193,7 +1199,7 @@ ModuleName=script
 [script]
 ImageDir=/usr/share/plymouth/themes/omarchy-minimal
 ScriptFile=/usr/share/plymouth/themes/omarchy-minimal/omarchy.script
-ConsoleLogBackgroundColor=0x050505
+ConsoleLogBackgroundColor=0x@GROUND_HEX@
 MonospaceFont=JetBrainsMono Nerd Font 22
 Font=JetBrainsMono Nerd Font 32
 """
@@ -1207,7 +1213,8 @@ def main():
     if not any(d.glob("a0_*.png")):
         build_assets(d)
     build_script(d)
-    (d / "omarchy-minimal.plymouth").write_text(METADATA)
+    (d / "omarchy-minimal.plymouth").write_text(
+        METADATA.replace("@GROUND_HEX@", GROUND[1:].upper()))
     print(f"theme built in {d}: {len(list(d.iterdir()))} files")
 
 

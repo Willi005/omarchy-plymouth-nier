@@ -60,7 +60,20 @@ def _die(msg):
 
 
 def _read_file(path):
-    out = {}
+    """Parse KEY=value lines. A repeated key is a warning, not an error.
+
+    The palette section ships four blocks and asks you to pick one by
+    commenting the rest, so "uncommented two of them" is the mistake this file
+    invites. Last-wins is well defined, but silently -- you would get a
+    coherent palette, just not the one you thought you chose. Naming both
+    lines and the winner turns that into thirty seconds instead of a puzzle.
+
+    It stays a warning because this also runs from a pacman hook, where dying
+    over a duplicate would leave the boot image unrebuilt mid-upgrade, and
+    because an intentional override after a block is a legitimate thing to
+    write.
+    """
+    out, seen = {}, {}
     if not path.exists():
         return out
     for n, line in enumerate(path.read_text(encoding="utf-8").splitlines(), 1):
@@ -70,7 +83,13 @@ def _read_file(path):
         if "=" not in line:
             _die(f"{path}:{n}: expected KEY=value, got {line!r}")
         k, _, v = line.partition("=")
-        out[k.strip()] = v.strip()
+        k, v = k.strip(), v.strip()
+        if k in seen:
+            print(f"warning: {path}: {k} is set twice, on line {seen[k]} and "
+                  f"line {n}; line {n} wins ({k}={v}). If you uncommented a "
+                  "palette block, comment the previous one.", file=sys.stderr)
+        seen[k] = n
+        out[k] = v
     return out
 
 

@@ -617,3 +617,83 @@ theme built in /tmp/...: 207 files
 and afterwards `loose_count = 35` in the installed script, with `built-for`
 carrying the user's fingerprint. Same fingerprint under a different uid,
 different fingerprint for a different config, both checked directly.
+
+## Three palettes, and two dark-ground assumptions (1.6.0)
+
+The config now ships four palette blocks — `BLACK` (active), `YORHA LIGHT`,
+`FLEXOKI LIGHT`, `CUSTOM` — selected by commenting the others. Getting a light
+palette to actually render required fixing two defects that had been invisible
+for six rounds because the theme had never stopped being black.
+
+### `GROUND` had no consumer in Plymouth
+
+`build-theme.py` emitted `Window.SetBackgroundTopColor(0.020, 0.020, 0.020)`,
+the matching bottom colour, and `ConsoleLogBackgroundColor=0x050505`. All three
+were literals; `GROUND` was read only by `build-limine.py`, for the boot menu's
+wallpaper. So the boot menu would have honoured a light palette and both
+Plymouth screens would not — dark ink on a black window.
+
+`Window.SetBackground*Color` is the one place in the theme where a colour is
+not baked into a PNG, so it needs the same placeholder treatment `@BONE_*@`
+already had. The substitution now loops over both names.
+
+The literal happened to be right: `#050505` is `5/255 = 0.0196`, which prints
+as `0.020`. Wiring it to `GROUND` therefore changes **nothing** on the black
+palette — verified by diffing the generated script, and the default config
+fingerprint is still `c137324d6272e8b7`, so no existing install sees a
+spurious regeneration.
+
+### `chrome_hi` only knew how to brighten
+
+The boot menu's countdown digit used
+`round(c * 1.65)` per channel. Multiplying channels is only "away from the
+ground" when the ground is the dark end; on paper it walks toward it. Measured
+against each palette's own ground:
+
+| palette | `CHROME` | `×1.65` | blend to `BONE` |
+|---|---|---|---|
+| black | 2.5:1 | 5.5:1 | 5.4:1 |
+| yorha | 2.5:1 | **1.0:1** | 3.8:1 |
+| flexoki | 3.6:1 | **1.3:1** | 7.5:1 |
+
+Now `blend(BONE, CHROME, 0.42)`, which is direction-correct either way and
+lands within a shade of the old value on black.
+
+The general rule: a derived colour computed by arithmetic on channels encodes
+an assumption about the ground even when it does not state one. Interpolate
+between the palette's own two declared ends instead.
+
+### Duplicate keys are now a warning
+
+`_read_file` tracks line numbers and warns when a key is set twice, naming both
+lines and the winner. Last-wins was already well defined but silent, and "left
+two palette blocks uncommented" is exactly the mistake this file now invites.
+It stays a warning rather than `_die` because this also runs from a pacman
+hook, where dying would leave the boot image unrebuilt mid-upgrade.
+
+### The light palettes are not inversions
+
+`CHROME`, `DIM` and `RUST` were solved for the same contrast ratio against
+`GROUND` that each already holds in the black set (2.5:1, 2.2:1, 4.1:1),
+keeping the warm hue. The composition therefore reads the same in all three and
+only the ground and the ink change. `BONE` lands at 12.3:1 black, 7.1:1 yorha,
+18.6:1 flexoki.
+
+Note the ambient field is drawn as `BONE` at 13-36% opacity over `GROUND`, so
+what governs its presence is the distance between those two, not `DIM`: the
+faintest glyph sits at 1.22:1, 1.22:1 and 1.32:1 respectively.
+
+### Verified
+
+Built the full theme in all three palettes at 2880x1800:
+
+- 207 identical filenames, and every asset identical in pixel dimensions —
+  only the ink differs
+- the generated script differs **only** in the two background lines and the
+  one `Image.Text` colour
+- `plyparse` OK on all three, with a working negative control
+- `plyrun` on black and flexoki: `verify`, `verify-clock` and `verify-keepout`
+  all report identical values (`frames_total = 312`, `keepout_hits = 0`,
+  `state_after_resume = 3`, `bar_while_frozen = 0`, full restore by frame 90),
+  which is the point — the palette changes ink, not behaviour
+- `interface_help_color_bright` per palette: `88836E`, `655F4D`, `555351`
