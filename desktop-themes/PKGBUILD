@@ -10,7 +10,7 @@
 # package cannot create directly; see omarchy-nier-themes and the scriptlet.
 
 pkgname=omarchy-nier-themes
-pkgver=1.0.0
+pkgver=1.0.1
 pkgrel=1
 pkgdesc="Two Omarchy desktop themes: Nier Black, and a beige-accented fork of Flexoki Light"
 arch=('any')

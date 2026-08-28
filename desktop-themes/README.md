@@ -63,6 +63,35 @@ light theme. It is copied rather than symlinked: Omarchy runs everything in
 that directory, and a dangling symlink there would error on every theme change
 once the package was gone.
 
+## The previews
+
+`preview.png` is what the theme menu shows. Omarchy's stock ones are real
+screenshots of a desktop — bar, editor, terminal, btop, file manager — and
+reproducing that literally would mean applying each theme to a live session,
+opening four apps, arranging them and grabbing the screen, twice, on somebody's
+working desktop.
+
+`build-previews.py` composes the same layout instead, from each theme's own
+`colors.toml` and `btop.theme`, and shoots it with headless Chromium:
+
+```bash
+python3 build-previews.py                 # both
+python3 build-previews.py nier-black      # one
+```
+
+It is a mock, not a screenshot, and does not pretend otherwise. What it
+promises is that every colour on it is a colour the theme actually specifies —
+including the CPU graph, which uses the real `btop.theme` gradient. The bar
+profiles come from a fixed seed, so the same palette always renders the same
+bytes.
+
+## Backgrounds
+
+The default is whichever file sorts first, because `choose_theme_background`
+takes `backgrounds[0]` when the current background is not in the new theme's
+list. Both themes lead with an orb (`01-orb.png`, `1-orb.png`); the Omarchy
+logo and the katakana variants sort after it deliberately.
+
 ## Building
 
 No build step — it is all data.
