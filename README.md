@@ -19,6 +19,16 @@ gets the restrained version of the same language: flat ground, the bone
 palette, and four corner brackets. See
 [The bootloader menu](#the-bootloader-menu).
 
+This is the boot half of the project. Its sibling,
+[`omarchy-nier-themes`](desktop-themes/), applies the same two palettes to the
+running desktop — terminal, btop, the browser, the file manager — as a
+separate package, since it needs Omarchy rather than Plymouth. Either works
+without the other.
+
+Full step-by-step: [INSTALL.md](INSTALL.md). Cheat sheet for the config keys
+people actually change: [CUSTOMIZING.md](CUSTOMIZING.md). Post-install
+checklist: [VERIFY.md](VERIFY.md).
+
 ## Install
 
 On Arch / Omarchy:
@@ -30,7 +40,9 @@ makepkg -si
 ```
 
 Nothing to edit first — configuration lives in `/etc/omarchy-plymouth-nier.conf`
-and is changed afterwards, see [Configuring it](#configuring-it).
+and is changed afterwards, see [Configuring it](#configuring-it). For the
+sibling desktop-themes package, and a walkthrough with expected output at each
+step, see [INSTALL.md](INSTALL.md).
 
 ### Or from the pacman repository
 
@@ -189,8 +201,15 @@ and their bands shrink as it grows.
 | `SCALE` | `0.70` | global size factor; artwork and layout scale as one |
 | `NAME` | account's real name | who gets greeted |
 | `WELCOME` / `GOODBYE` | `Welcome, {name}` | templates carrying `{name}` |
+| `GOODBYE_FADE` | `0.25` | seconds for the farewell to fade in on shutdown |
 | `HINT` | `TYPE A PASSWORD · …` | the bottom line, hidden once you type |
 | `RESOLUTION` | `auto` | the panel the artwork is rasterised for |
+
+`GOODBYE_FADE` has no universally correct value, only one that suits how this
+machine shuts down: a laptop that stays lit for a couple of seconds after the
+splash appears can afford a slow fade, a desktop that cuts the monitor signal
+almost instantly needs the farewell at full opacity from the first frame
+(`GOODBYE_FADE=0`), or it never finishes appearing.
 
 **The Limine boot menu**
 
@@ -390,6 +409,8 @@ plymouth-stake.sh               what plymouthd.conf must say, how to repair it a
 omarchy-nier-stake              hook dispatcher, installed under libalpm/scripts
 85-...-claim.hook               repairs the config after an omarchy update
 99-...-rebuild.hook             rebuilds the boot image if nothing else did
+desktop-themes/                 the sibling package: two desktop themes, their own
+                                PKGBUILD, and build-gtk.py / build-previews.py
 aur/                            AUR-flavoured PKGBUILD and .SRCINFO, plus sync.sh
 CLAUDE.md                       working notes: the traps, and how to verify a change
 docs/                           design specs
