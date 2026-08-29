@@ -901,3 +901,49 @@ new key never reaches an existing `/etc/omarchy-plymouth-nier.conf`. pacman
 leaves a `.pacnew` instead, and the user's screen keeps the old default until
 someone merges it. Every future config key needs that said out loud rather than
 assumed.
+
+## The farewell was too slow for a fast machine (1.7.2)
+
+Reported from a second machine: the boot chain works, the shutdown screen is
+just black. The first instinct — a regression in the 1.7.1 restructure — was
+wrong, and so was the second.
+
+Ruled out by measurement, so nobody re-checks them:
+
+- **The theme is intact on that machine.** `built-for` reports its own
+  1920x1080, so the source build rasterised correctly for it.
+- **Not the shutdown initramfs.** Arch pivots to a ramfs generated at shutdown
+  by `mkinitcpio-generate-shutdown-ramfs`, whose `plymouth-shutdown` hook does
+  `add_full_dir` on the theme. Built one by hand: all 207 files present, fonts
+  copied, build clean.
+- **Not the missing `plymouthd.conf`.** That file genuinely is absent from the
+  shutdown ramfs, and plymouthd's fallback chain would land on `Theme=bgrt`,
+  which is not in the ramfs either — a tidy story, and false. `on_newroot` in
+  plymouthd does not call `load_theme`; only `show_theme` does. The theme is
+  not reloaded across the pivot.
+
+The actual cause is a design assumption. `shutdown_frame` fades the farewell in
+over `global.frame / 45.0` — 45 frames, close to a second. That was written on
+a laptop that takes its time shutting down. A desktop cuts the monitor signal
+in a fraction of a second, and anything not yet opaque by then is never seen.
+Measured with plyrun:
+
+| frame | fade over 45 | fade over 12 |
+|---|---|---|
+| 5 | 0.10 | 0.38 |
+| 10 | 0.20 | 0.77 |
+| 20 | 0.41 | 0.92 |
+
+At ten frames the farewell was at a fifth of its opacity, in bone on a
+near-black ground. Invisible, and indistinguishable from "the theme never
+painted" — which is exactly how it was reported, and why the black palette hid
+it for so long on the first machine.
+
+New key `GOODBYE_FADE`, in seconds, default 0.25 (12 frames), clamped 0..5. It
+is configurable rather than merely faster because there is no correct value:
+what varies is how long the panel stays alive after the splash appears, and
+that is a property of the machine, not of the theme. `GOODBYE_FADE=0` collapses
+to a single frame and shows the farewell at full opacity immediately.
+
+Boot-path assertions unchanged: 7 segments, 21 shards, 8 brackets, resume to
+state 3, bar 0.12, keep-out 0.

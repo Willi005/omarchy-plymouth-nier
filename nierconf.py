@@ -37,6 +37,7 @@ DEFAULTS = {
     # composition
     "SCALE": "0.70", "NAME": "", "WELCOME": "Welcome, {name}",
     "GOODBYE": "Goodbye, {name}", "HINT": "TYPE A PASSWORD  ·  ENTER TO UNLOCK",
+    "GOODBYE_FADE": "0.25",
     "RESOLUTION": "auto", "BRANDING": "OMARCHY",
     "BRACKET_INSET": "0.030", "BRACKET_ARM": "0.065", "MENU_HELP": "on",
 }
@@ -52,6 +53,12 @@ FRACTIONS = {
     "BRACKET_INSET": (0.0, 0.2, False),
     "BRACKET_ARM": (0.0, 0.5, False),
     "KEEPOUT": (0.0, 0.25, False),
+    # Seconds for the farewell to fade in. Clamped rather than refused because
+    # there is no wrong value here, only values that suit a given machine: how
+    # long the screen stays alive after the shutdown splash appears varies
+    # enormously. A desktop can cut the signal in a fraction of a second, and
+    # anything that has not finished appearing by then is never seen.
+    "GOODBYE_FADE": (0.0, 5.0, True),
 }
 FLAGS = ("FIELD", "MENU_HELP")
 # key -> (low, high). Whole numbers of pixels, measured on a 1800-tall screen

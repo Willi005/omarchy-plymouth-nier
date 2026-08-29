@@ -267,6 +267,12 @@ def build_script(d: Path):
             body = body.replace(f"@{name}_{axis}@", f"{chan:.3f}")
     body = body.replace("@MAX_ATT@", str(MAX_ATTEMPT_LABEL))
     body = body.replace("@PROGRESS_H@", str(PROGRESS_HEIGHT))
+    # global.fps is 50, so seconds -> frames. Never zero: the script divides
+    # by it, and a fade of one frame is already indistinguishable from an
+    # instant appearance.
+    body = body.replace(
+        "@BYE_FADE@",
+        f"{max(1, round(CONF.frac('GOODBYE_FADE') * 50)):.1f}")
     # Box sizes the script used to read back off the artwork. They are known
     # here, and taking them from the images meant every one of those images
     # had to be loaded even on the shutdown path, which draws none of them.
@@ -1010,7 +1016,7 @@ fun update_progress(value) {
 fun shutdown_frame() {
   t = global.frame / global.fps;
 
-  k = global.frame / 45.0;
+  k = global.frame / @BYE_FADE@;
   if (k > 1) k = 1;
   breath = 0.94 + 0.06 * (Math.Cos(t * 0.7) + 1) / 2;
   global.bye_alpha = 0.92 * k * breath;
